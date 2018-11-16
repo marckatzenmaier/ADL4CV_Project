@@ -1,0 +1,58 @@
+from torch.utils.data import Dataset
+from torchvision.datasets.folder import default_loader
+import dataset_utils.MOT_utils as motu
+import numpy as np
+
+
+class MOT_bb_singleframe(Dataset):
+    """
+
+
+    """
+    def __init__(self, paths_file, loader=default_loader, transform=None, target_transform=None):
+        """
+        inits of all file names and bounding boxes
+        """
+        self.loader = loader
+        self.transform = transform
+        self.target_transform = target_transform
+        paths = motu.parse_videos_file(paths_file)
+        current_index = 0
+        used_index = [0, 2, 3, 4, 5]
+        self.all_gt = np.zeros([0, 5])
+        self.all_imagepaths = []
+
+        for path in paths:
+            gt, img, info = motu.get_gt_img_inf(path)
+            gt = motu.transform_bb_to_centered(gt)
+            gt = gt[:, used_index]
+            gt[:, 0] += current_index
+            current_index += info.seqLength
+            self.all_gt = np.concatenate((self.all_gt, gt), 0)
+            self.all_imagepaths += img
+
+    def __getitem__(self, index):
+        """
+        load the image itself
+        and choose the right bb frame
+        """
+        target = motu.filter_gt(self.all_gt, index)
+        target = target[:,1:]
+        sample = self.loader(self.all_imagepaths[index])
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        return sample, target
+
+    def __len__(self):
+        """
+        len of the dataset
+        """
+        return len(self.all_imagepaths)
+
+
+#test
+#a = MOT_bb_singleframe('../Mot17_test_single.txt')
+#c, b = a.__getitem__(0)
+#print(b[[0,1,2]])
