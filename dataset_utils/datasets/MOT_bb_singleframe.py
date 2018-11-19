@@ -2,25 +2,25 @@ from torch.utils.data import Dataset
 from torchvision.datasets.folder import default_loader
 import dataset_utils.MOT_utils as motu
 import numpy as np
-
+import torchvision.transforms as trans
 
 class MOT_bb_singleframe(Dataset):
     """
-
-
+    dataset which loads each frame individual
     """
     def __init__(self, paths_file, loader=default_loader, transform=None, target_transform=None):
         """
         inits of all file names and bounding boxes
         """
         self.loader = loader
-        self.transform = transform
+        self.transform = trans.Compose([transform, trans.ToTensor()])
         self.target_transform = target_transform
         paths = motu.parse_videos_file(paths_file)
         current_index = 0
         used_index = [0, 2, 3, 4, 5]
         self.all_gt = np.zeros([0, 5])
         self.all_imagepaths = []
+        self.num_classes = 80  # todo remove its only for first test with loss requires class
 
         for path in paths:
             gt, img, info = motu.get_gt_img_inf(path)
@@ -37,11 +37,20 @@ class MOT_bb_singleframe(Dataset):
         and choose the right bb frame
         """
         target = motu.filter_gt(self.all_gt, index)
-        target = target[:,1:]
+        target = target[:, 1:]
         sample = self.loader(self.all_imagepaths[index])
+        width, height = sample.size
         if self.transform is not None:
             sample = self.transform(sample)
-        if self.target_transform is not None:
+        if height != sample.shape[1] and width != sample.shape[2]:
+            height_scale = height/sample.shape[1]
+            width_scale = width/sample.shape[1]
+            if self.target_transform is not None:
+                target = trans.Compose([trans.Lambda(lambda x: motu.resize_bb(x, height_scale, width_scale)),
+                                        self.target_transform])(target)
+            else:
+                target = motu.resize_bb(target, height_scale, width_scale)
+        elif self.target_transform is not None:
             target = self.target_transform(target)
         return sample, target
 

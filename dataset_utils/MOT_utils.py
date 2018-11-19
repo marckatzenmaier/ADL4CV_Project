@@ -32,10 +32,10 @@ def parse_videos_file(path):
     return paths
 
 
-"""
-    here the index is already fixed for python frame 0 is image 000001.jpg
-"""
 def get_gt_img_inf(path):
+    """
+        here the index is already fixed for python frame 0 is image 000001.jpg
+    """
     folder = ['gt/gt.txt', 'img1/', 'seqinfo.ini']
     imgs = os.listdir(path+folder[1])
     imgs = sorted(imgs)
@@ -54,12 +54,14 @@ def convert_mat_py_notation(gt):
     gt_py[:, [0, 2, 3]] -= 1
     return gt_py
 
+
 def loadImg(path):
     return mpimg.imread(path)
-    #return scipy.misc.imread(path)
+
 
 def imshow(img):
     plt.imshow(img)
+
 
 def transform_bb_to_centered(gt):
     """
@@ -69,6 +71,13 @@ def transform_bb_to_centered(gt):
     gt[:, gt_labels['box_l']] = gt[:, gt_labels['box_l']] + gt[:, gt_labels['box_w']]/2
     gt[:, gt_labels['box_t']] = gt[:, gt_labels['box_t']] + gt[:, gt_labels['box_h']]/2
     return gt
+
+
+def resize_bb(gt, height_factor, width_factor):
+    gt[:, [0, 2]] /= width_factor
+    gt[:, [1, 3]] /= height_factor
+    return gt
+
 
 #testing stuff
 # todo care 0<>1 origin for image list and pixel origin
