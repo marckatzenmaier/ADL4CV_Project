@@ -25,6 +25,7 @@ class MOT_bb_singleframe(Dataset):
         for path in paths:
             gt, img, info = motu.get_gt_img_inf(path)
             gt = motu.transform_bb_to_centered(gt)
+            gt = motu.filter_person(gt)
             gt = gt[:, used_index]
             gt[:, 0] += current_index
             current_index += info.seqLength

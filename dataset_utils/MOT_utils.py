@@ -8,7 +8,8 @@ import matplotlib.image as mpimg
 
 
 # todo labels for 6,7,8
-gt_labels = {'frame_nr': 0, 'box_id': 1, 'box_l': 2, 'box_t': 3, 'box_w': 4, 'box_h': 5, 'a': 6, 'b': 7, 'c': 8}
+gt_labels = {'frame_nr': 0, 'box_id': 1, 'box_l': 2, 'box_t': 3, 'box_w': 4, 'box_h': 5, 'detection_conf': 6,
+             'class_label': 7, 'visibility_ratio': 8}
 
 
 class Mot17_info():
@@ -48,6 +49,10 @@ def get_gt_img_inf(path):
 def filter_gt(gt, info, infotyp='frame_nr'):
     return gt[gt[:, gt_labels[infotyp]] == info, :]
 
+def filter_person(gt):
+    index = gt[:, gt_labels['class_label']]
+    index = ((index == 1).astype(np.int) + (index == 2).astype(np.int) + (index == 7).astype(np.int)) > 0
+    return gt[index, :]
 
 def convert_mat_py_notation(gt):
     gt_py = gt
