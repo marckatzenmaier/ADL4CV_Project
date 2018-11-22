@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 from torchvision.datasets.folder import default_loader
 import dataset_utils.MOT_utils as motu
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class MotBBSequence(Dataset):
@@ -13,6 +14,8 @@ class MotBBSequence(Dataset):
         """
         inits of all file names and bounding boxes
         """
+        # todo look up frame rate
+        # todo include images for debugging
         self.loader = loader
         paths = motu.parse_videos_file(paths_file)
         self.all_gt = np.zeros([0, 5])
@@ -20,13 +23,15 @@ class MotBBSequence(Dataset):
         #            dict    list  list
         # tmp format video->frame->boxes with id
         videos = {i: [] for i in range(len(paths))}
+        # stats stuff
+        all_traj_lengths = np.zeros(1)
+        all_displacements = np.zeros(1)
 
         for i, path in enumerate(paths):
             # gt format: [frame id 4 box parameter]
             #tmp debug until i download the dataset
             path = '../../' + path
             #tmp
-            # todo implement stats (mean ped trajectory length, average displacement from begin to end)
             gt, info = motu.get_gt_info(path)
             num_frames = info.seqLength
             height_scale = info.imHeight / new_height
@@ -34,11 +39,39 @@ class MotBBSequence(Dataset):
             gt = motu.transform_bb_to_centered(gt)
             gt[:, [2, 4]] /= width_scale
             gt[:, [3, 5]] /= height_scale
+            # calc stats
+            # trajectory length (mean , std, max min)
+            max_ped_id = int(np.max(gt[:, 1])) # ids start at 1
+            # for each id calc the number of sample
+            traj_lengths = np.zeros(max_ped_id)
+            displacments = np.zeros(max_ped_id)
+            for ped_id in range(max_ped_id):
+                ids = np.where(gt[:, 1] == ped_id+1)[0]
+                # trajectory length
+                traj_lengths[ped_id] = ids.shape[0]
+                # displacment from begin to end
+                start = gt[ids[0], 2:4]
+                end = gt[ids[-1], 2:4]
+                displacments[ped_id] = np.sqrt(np.sum(np.square(start-end)))
+            all_traj_lengths = np.concatenate([all_traj_lengths, traj_lengths])
+            all_displacements = np.concatenate([all_displacements, displacments])
 
             videos[i] = [None for j in range(num_frames)]
             for j in range(num_frames):
                 videos[i][j] = gt[np.where(gt[:, 0] == j)]
-        # todo implement final dataset structure -> create finite sequences with constant length s.t index -> seq
+
+        # calc stats from length
+        all_traj_lengths = all_traj_lengths[1:]  # first element is dummy
+        print("Mean trajectory length: {}".format(np.mean(all_traj_lengths)))
+        print("Deviation of trajectory length: {}".format(np.std(all_traj_lengths)))
+        print("Max trajectory length: {}".format(np.max(all_traj_lengths)))
+        print("Min trajectory length: {}".format(np.min(all_traj_lengths)))
+        all_displacements = all_displacements[1:]
+        print("Mean displacement: {}".format(np.mean(all_displacements)))
+        print("Deviation of displacements: {}".format(np.std(all_displacements)))
+        print("Max displacement: {}".format(np.max(all_displacements)))
+        print("Min displacement: {}".format(np.min(all_displacements)))
+
         # [batch_size, seq_index, (id bb)]
         # first idea : assume each frame has at maximum 120 (calc it in stats)
         self.sequences = []
@@ -57,21 +90,49 @@ class MotBBSequence(Dataset):
                 else:
                     print("finished video {} at index {}/{}".format(video, start_index+seq_length, video_len))
                     break
-        print(len(self.sequences))
 
     def __getitem__(self, index):
         """
-        return sequence with static length
+        Returns sequence with static lenght.
+        :param index:
+        :return: Numpy array with shape (seq_length, 120, 5) (most of the 120 entries will be zeroes)
+        
         """
-        # todo
-        return sample, target
+        # todo seq_length 20 means that the 20th sample is only used as a target
+        return self.sequences[index][:-1], self.sequences[index][1:]
 
     def __len__(self):
         """
         len of the dataset
         """
-        return len(self.all_imagepaths)
+        return len(self.sequences)
 
 
 # test
-a = MotBBSequence('../Mot17_test_single.txt')
+test_data = MotBBSequence('../Mot17_test_single.txt')
+# draw boxes in black image
+image = np.zeros((224, 224), dtype=np.uint8)
+test_sequence = test_data[0][0]
+print(test_sequence.shape)
+for i in range(19):
+    boxes = test_sequence[i]
+    for box in range(120):
+        if np.sum(boxes[box, 1:]) != 0:
+            width = int(boxes[box, 3])
+            height = int(boxes[box, 4])
+
+            top_left_x = boxes[box, 1] - width / 2
+            top_left_y = boxes[box, 2] - height / 2
+
+            image[int(top_left_y), int(top_left_x): int(top_left_x + width)] = 255
+            image[int(top_left_y + height), int(top_left_x): int(top_left_x + width)] = 255
+            image[int(top_left_y):int(top_left_y + height), int(top_left_x)] = 255
+            image[int(top_left_y):int(top_left_y + height), int(top_left_x + width)] = 255
+
+    plt.imshow(image)
+    plt.show()
+
+
+
+
+
