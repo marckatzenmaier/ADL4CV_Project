@@ -89,6 +89,7 @@ class MOT_bb_singleframe_eval(Dataset):
             gt = motu.filter_person(gt)
             gt = motu.filter_frames(gt, modified_length, info.seqLength)
             gt = gt[:, used_index]
+            gt[:, 0] -= modified_length
             gt[:, 0] += current_index
             current_index += info.seqLength-modified_length
             self.all_gt = np.concatenate((self.all_gt, gt), 0)

@@ -47,7 +47,7 @@ class YoloLoss(nn.modules.loss._Loss):
         anchor_w = self.anchors[:, 0].contiguous().view(self.num_anchors, 1)
         anchor_h = self.anchors[:, 1].contiguous().view(self.num_anchors, 1)
 
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and output.is_cuda:
             pred_boxes = pred_boxes.cuda()
             lin_x = lin_x.cuda()
             lin_y = lin_y.cuda()
@@ -64,7 +64,7 @@ class YoloLoss(nn.modules.loss._Loss):
         coord_mask, conf_mask, tcoord, tconf = self.build_targets(pred_boxes, target, height, width)
         coord_mask = coord_mask.expand_as(tcoord)
 
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and output.is_cuda:
             tcoord = tcoord.cuda()
             tconf = tconf.cuda()
             coord_mask = coord_mask.cuda()

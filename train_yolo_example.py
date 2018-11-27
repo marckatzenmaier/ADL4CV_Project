@@ -134,14 +134,13 @@ def train(opt):
     #  optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(opt.momentum, 0.999), weight_decay=opt.decay)
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=opt.momentum, weight_decay=opt.decay)
     model.train()
-
     for img, gt in training_loader:
         if torch.cuda.is_available() and useCuda:
             img = Variable(img.cuda(), requires_grad=True)
         else:
             img = Variable(img, requires_grad=True)
         break
-    for i in range(20):
+    for i in range(2):
         optimizer.zero_grad()
         logits = model(img)
         loss, loss_coord, loss_conf = criterion(logits, gt)
@@ -153,6 +152,34 @@ def train(opt):
         writer.add_scalar('Train/Total_loss', loss, i)
         writer.add_scalar('Train/Coordination_loss', loss_coord, i)
         writer.add_scalar('Train/Confidence_loss', loss_conf, i)
+
+    # eval stuff
+    # model, eval_loader, criterion, writer/out_losses
+    model.eval()
+    loss_ls = []
+    loss_coord_ls = []
+    loss_conf_ls = []
+    for te_iter, te_batch in enumerate(eval_loader):
+        te_image, te_label = te_batch
+        num_sample = len(te_label)
+        if torch.cuda.is_available() and useCuda:
+            te_image = te_image.cuda()
+        with torch.no_grad():
+            te_logits = model(te_image)
+            batch_loss, batch_loss_coord, batch_loss_conf = criterion(te_logits, te_label)
+        loss_ls.append(batch_loss * num_sample)
+        loss_coord_ls.append(batch_loss_coord * num_sample)
+        loss_conf_ls.append(batch_loss_conf * num_sample)
+        break
+    te_loss = sum(loss_ls) / eval_set.__len__()
+    te_coord_loss = sum(loss_coord_ls) / eval_set.__len__()
+    te_conf_loss = sum(loss_conf_ls) / eval_set.__len__()
+    print('{}  {}   {}'.format(te_loss, te_coord_loss, te_conf_loss))
+    writer.add_scalar('Test/Total_loss', te_loss, i)
+    writer.add_scalar('Test/Coordination_loss', te_coord_loss, i)
+    writer.add_scalar('Test/Confidence_loss', te_conf_loss, i)
+
+
     writer.export_scalars_to_json(log_path + os.sep + "all_logs.json")
     writer.close()
     torch.save(model.state_dict(), '/home/marc/Documents/projects/ADL4CV_project/models/my_test_model/model_state_dict.pt')
