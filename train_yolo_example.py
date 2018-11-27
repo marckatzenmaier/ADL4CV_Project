@@ -16,6 +16,7 @@ from tensorboardX import SummaryWriter
 import shutil
 import time
 from dataset_utils.datasets.MOT_bb_singleframe import MOT_bb_singleframe
+from dataset_utils.datasets.MOT_bb_singleframe import MOT_bb_singleframe_eval
 
 import dataset_utils.MOT_utils as motu
 
@@ -75,6 +76,9 @@ def train(opt):
     trans = torchvision.transforms.Compose([torchvision.transforms.Resize((opt.image_size, opt.image_size))])
     training_set = MOT_bb_singleframe(dataset_file, transform=trans)
     training_loader = DataLoader(training_set)
+
+    eval_set = MOT_bb_singleframe_eval(dataset_file, transform=trans)
+    eval_loader = DataLoader(eval_set)
 
     #test_set = COCODataset(opt.data_path, opt.year, opt.test_set, opt.image_size, is_training=False)
     #test_generator = DataLoader(test_set, **test_params)

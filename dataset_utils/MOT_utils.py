@@ -54,6 +54,11 @@ def filter_person(gt):
     index = ((index == 1).astype(np.int) + (index == 2).astype(np.int) + (index == 7).astype(np.int)) > 0
     return gt[index, :]
 
+def filter_frames(gt, start, end):
+    index = gt[:, gt_labels['frame_nr']]
+    index = np.logical_and((start <= index), (index < end))
+    return gt[index, :]
+
 def convert_mat_py_notation(gt):
     gt_py = gt
     gt_py[:, [0, 2, 3]] -= 1

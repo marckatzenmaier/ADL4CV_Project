@@ -37,20 +37,20 @@ def post_processing(logits, image_size, gt_classes, anchors, conf_threshold, nms
         anchor_w = anchor_w.cuda()
         anchor_h = anchor_h.cuda()
 
-    logits = logits.view(batch, num_anchors, -1, h * w)
+    logits = logits.view(batch, num_anchors, -1, h * w)   # sets bounding boxes
     logits[:, :, 0, :].sigmoid_().add_(lin_x).div_(w)
     logits[:, :, 1, :].sigmoid_().add_(lin_y).div_(h)
     logits[:, :, 2, :].exp_().mul_(anchor_w).div_(w)
     logits[:, :, 3, :].exp_().mul_(anchor_h).div_(h)
     logits[:, :, 4, :].sigmoid_()
 
-    with torch.no_grad():
+    with torch.no_grad():  # class stuff
         cls_scores = torch.nn.functional.softmax(logits[:, :, 5:, :], 2)
     cls_max, cls_max_idx = torch.max(cls_scores, 2)
     cls_max_idx = cls_max_idx.float()
     cls_max.mul_(logits[:, :, 4, :])
 
-    score_thresh = cls_max > conf_threshold
+    score_thresh = cls_max > conf_threshold  # todo fix since we don't have classes
     score_thresh_flat = score_thresh.view(-1)
 
     if score_thresh.sum() == 0:
@@ -60,7 +60,7 @@ def post_processing(logits, image_size, gt_classes, anchors, conf_threshold, nms
     else:
         coords = logits.transpose(2, 3)[..., 0:4]
         coords = coords[score_thresh[..., None].expand_as(coords)].view(-1, 4)
-        scores = cls_max[score_thresh]
+        scores = cls_max[score_thresh]  # class stuff
         idx = cls_max_idx[score_thresh]
         detections = torch.cat([coords, scores[:, None], idx[:, None]], dim=1)
 
