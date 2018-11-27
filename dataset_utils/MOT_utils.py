@@ -33,6 +33,16 @@ def parse_videos_file(path):
     return paths
 
 
+def get_gt_info(path):
+    """
+        here the index is already fixed for python frame 0 is image 000001.jpg
+    """
+    folder = ['gt/gt.txt', 'seqinfo.ini']
+    info = Mot17_info(path+folder[1])
+    gt = np.loadtxt(path+folder[0], delimiter=',')
+    return convert_mat_py_notation(gt), info
+
+
 def get_gt_img_inf(path):
     """
         here the index is already fixed for python frame 0 is image 000001.jpg
@@ -84,6 +94,14 @@ def transform_bb_to_centered(gt):
 
 
 def resize_bb(gt, height_factor, width_factor):
+
+    """
+
+    :param gt: Numpy array with shape (num_boxes, 4).
+    :param height_factor: Factor to change height of boxes in gt.
+    :param width_factor: Factor to change widht of boxes in gt.
+    :return: Returns array with same shape as gt. Boxes are resized by given factors, but parameters are floats.
+    """
     gt[:, [0, 2]] /= width_factor
     gt[:, [1, 3]] /= height_factor
     return gt
