@@ -1,7 +1,7 @@
-/home/marc/Documents/projects/ADL4CV_project/datasets/MOT17/train/MOT17-02-SDP/
-/home/marc/Documents/projects/ADL4CV_project/datasets/MOT17/train/MOT17-04-SDP/
-/home/marc/Documents/projects/ADL4CV_project/datasets/MOT17/train/MOT17-05-SDP/
-/home/marc/Documents/projects/ADL4CV_project/datasets/MOT17/train/MOT17-09-SDP/
-/home/marc/Documents/projects/ADL4CV_project/datasets/MOT17/train/MOT17-10-SDP/
-/home/marc/Documents/projects/ADL4CV_project/datasets/MOT17/train/MOT17-11-SDP/
-/home/marc/Documents/projects/ADL4CV_project/datasets/MOT17/train/MOT17-13-SDP/
+datasets/MOT17-02-SDP/
+datasets/MOT17-04-SDP/
+datasets/MOT17-05-SDP/
+datasets/MOT17-09-SDP/
+datasets/MOT17-10-SDP/
+datasets/MOT17-11-SDP/
+datasets/MOT17-13-SDP/

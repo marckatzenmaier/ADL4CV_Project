@@ -146,6 +146,12 @@ def main(argv):
         gt[pos_ids_x, 4] = info.imWidth - gt[pos_ids_x, 2] - 1  # equal would also be bad
         gt[pos_ids_y, 5] = info.imHeight - gt[pos_ids_y, 3] - 1
 
+        # normalise boxes
+        height_scale = info.imHeight / height_in_cfg_file
+        width_scale = info.imWidth / width_in_cfg_file
+        gt[:, [2, 4]] /= width_scale
+        gt[:, [3, 5]] /= height_scale
+
         all_boxes = np.concatenate([all_boxes, gt[:, [4, 5]]])
 
     annotation_dims = all_boxes

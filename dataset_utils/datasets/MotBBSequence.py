@@ -143,30 +143,30 @@ class MotBBSequence(Dataset):
         """
         return len(self.sequences)
 
+if __name__ == "__main__":
+    # debug
+    test_data = MotBBSequence('../Mot17_test_single.txt')
+    # draw boxes in black image
+    image = np.zeros((224, 224), dtype=np.uint8)
+    test_sequence = test_data[0][0]
+    print(test_sequence.shape)
+    for i in range(19):
+        boxes = test_sequence[i]
+        for box in range(120):
+            if np.sum(boxes[box, 1:]) != 0:
+                width = int(boxes[box, 3])
+                height = int(boxes[box, 4])
 
-# test
-test_data = MotBBSequence('../Mot17_test_single.txt')
-# draw boxes in black image
-image = np.zeros((224, 224), dtype=np.uint8)
-test_sequence = test_data[0][0]
-print(test_sequence.shape)
-for i in range(19):
-    boxes = test_sequence[i]
-    for box in range(120):
-        if np.sum(boxes[box, 1:]) != 0:
-            width = int(boxes[box, 3])
-            height = int(boxes[box, 4])
+                top_left_x = boxes[box, 1] - width / 2
+                top_left_y = boxes[box, 2] - height / 2
 
-            top_left_x = boxes[box, 1] - width / 2
-            top_left_y = boxes[box, 2] - height / 2
+                image[int(top_left_y), int(top_left_x): int(top_left_x + width)] = 255
+                image[int(top_left_y + height), int(top_left_x): int(top_left_x + width)] = 255
+                image[int(top_left_y):int(top_left_y + height), int(top_left_x)] = 255
+                image[int(top_left_y):int(top_left_y + height), int(top_left_x + width)] = 255
 
-            image[int(top_left_y), int(top_left_x): int(top_left_x + width)] = 255
-            image[int(top_left_y + height), int(top_left_x): int(top_left_x + width)] = 255
-            image[int(top_left_y):int(top_left_y + height), int(top_left_x)] = 255
-            image[int(top_left_y):int(top_left_y + height), int(top_left_x + width)] = 255
-
-    plt.imshow(image)
-    plt.show()
+        plt.imshow(image)
+        plt.show()
 
 
 

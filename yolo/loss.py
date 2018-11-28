@@ -90,8 +90,8 @@ class YoloLoss(nn.modules.loss._Loss):
         tcoord = torch.zeros(batch_size, self.num_anchors, 4, height * width, requires_grad=False)
         tconf = torch.zeros(batch_size, self.num_anchors, height * width, requires_grad=False)
 
-
         for b in range(batch_size):
+
             if len(ground_truth[b]) == 0:
                 continue
 
