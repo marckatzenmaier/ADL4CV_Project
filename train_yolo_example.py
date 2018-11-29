@@ -52,56 +52,27 @@ def get_args():
 
 
 def train(opt):
-    useCuda = False
+    useCuda = True
     # setup train and eval set
     if torch.cuda.is_available() and useCuda:
         torch.cuda.manual_seed(123)
     else:
         torch.manual_seed(123)
-    learning_rate_schedule = {"0": 1e-5, "5": 1e-4,
-                              "80": 1e-5, "110": 1e-6}
-    #training_params = {"batch_size": opt.batch_size,
-    #                   "shuffle": True,
-    #                   "drop_last": True,
-    #                   "collate_fn": custom_collate_fn}
-    #test_params = {"batch_size": opt.batch_size,
-    #               "shuffle": False,
-    #               "drop_last": False,
-    #               "collate_fn": custom_collate_fn}
-
-    #todo hardcoded path
 
     opt.image_size = 96  #todo hardcoded bad
     dataset_file = '/home/marc/Documents/projects/ADL4CV_project/ADL4CV_Project/dataset_utils/Mot17_test_single.txt'
+    dataset_file = '/home/marc/Documents/projects/ADL4CV_project/ADL4CV_Project/dataset_utils/Mot17_1_video.txt'
     trans = torchvision.transforms.Compose([torchvision.transforms.Resize((opt.image_size, opt.image_size))])
     training_set = MOT_bb_singleframe(dataset_file, transform=trans)
-    training_loader = DataLoader(training_set)
+    training_loader = DataLoader(training_set, shuffle=True)
 
     eval_set = MOT_bb_singleframe_eval(dataset_file, transform=trans)
     eval_loader = DataLoader(eval_set)
 
-    #test_set = COCODataset(opt.data_path, opt.year, opt.test_set, opt.image_size, is_training=False)
-    #test_generator = DataLoader(test_set, **test_params)
-
     # load the model
-    #todo hardcoded path
-    opt.pre_trained_model_path = '/home/marc/Documents/projects/ADL4CV_project/models/coco2014_2017/trained_models/whole_model_trained_yolo_coco'
-    opt.log_path = '/home/marc/Documents/projects/ADL4CV_project/log/test'
-    opt.pre_trained_model_path = '/home/marc/Documents/projects/ADL4CV_project/models/my_test_model/model_state_dict.pt'
-    opt.pre_trained_model_path = '/home/marc/Documents/projects/ADL4CV_project/models/baseWeights/yolo80.pt'
-    # todo use convention like: https://pytorch.org/tutorials/beginner/saving_loading_models.html is much easyer to convert
-    '''if torch.cuda.is_available() and useCuda:
-        if opt.pre_trained_model_type == "model":
-            model = torch.load(opt.pre_trained_model_path)
-        else:
-            model = Yolo(training_set.num_classes)
-            model.load_state_dict(torch.load(opt.pre_trained_model_path))
-    else:
-        if opt.pre_trained_model_type == "model":
-            model = torch.load(opt.pre_trained_model_path, map_location=lambda storage, loc: storage)
-        else:
-            model = Yolo(training_set.num_classes)
-            model.load_state_dict(torch.load(opt.pre_trained_model_path, map_location=lambda storage, loc: storage))'''
+    opt.log_path = './log/test'
+    opt.pre_trained_model_path = '.models/yolo80_coco.pt'
+    # save convention: https://pytorch.org/tutorials/beginner/saving_loading_models.html
 
     model = Yolo(training_set.num_classes)
     if torch.cuda.is_available() and useCuda:
@@ -132,57 +103,61 @@ def train(opt):
     # loss and optimizer
     criterion = yloss(training_set.num_classes, model.anchors, opt.reduction)
     #  optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(opt.momentum, 0.999), weight_decay=opt.decay)
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=opt.momentum, weight_decay=opt.decay)
-    model.train()
-    for img, gt in training_loader:
-        if torch.cuda.is_available() and useCuda:
-            img = Variable(img.cuda(), requires_grad=True)
-        else:
-            img = Variable(img, requires_grad=True)
-        break
-    for i in range(2):
-        optimizer.zero_grad()
-        logits = model(img)
-        loss, loss_coord, loss_conf = criterion(logits, gt)
-        loss.backward()
-        optimizer.step()
-        print('Iteration {0:7d} loss: {1:8.4f}, \tcoord_loss: {2:8.4f}, \tconf_loss: {3:8.4f}'.format(i+1, loss.detach().cpu().numpy(), loss_coord.detach().cpu().numpy(),
-                                                     loss_conf.detach().cpu().numpy()))
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-5, momentum=opt.momentum, weight_decay=opt.decay)
+    opt.num_epoches = 3
+    epoch_len = len(training_loader)
+    for epoch in range(opt.num_epoches):
+        print('num epoch: {:4d}'.format(epoch))
+        model.train()
+        for img_nr, (img, gt) in enumerate(training_loader):
+            if torch.cuda.is_available() and useCuda:
+                img = Variable(img.cuda(), requires_grad=True)
+            else:
+                img = Variable(img, requires_grad=True)
+            optimizer.zero_grad()
+            logits = model(img)
+            loss, loss_coord, loss_conf = criterion(logits, gt)
+            loss.backward()
+            optimizer.step()
+            print('Iteration {0:7d} loss: {1:8.4f}, \tcoord_loss: {2:8.4f}, \tconf_loss: {3:8.4f}'.format(epoch*epoch_len + img_nr, loss.detach().cpu().numpy(), loss_coord.detach().cpu().numpy(),
+                                                         loss_conf.detach().cpu().numpy()))
 
-        writer.add_scalar('Train/Total_loss', loss, i)
-        writer.add_scalar('Train/Coordination_loss', loss_coord, i)
-        writer.add_scalar('Train/Confidence_loss', loss_conf, i)
+            writer.add_scalar('Train/Total_loss', loss, epoch*epoch_len + img_nr)
+            writer.add_scalar('Train/Coordination_loss', loss_coord, epoch*epoch_len + img_nr)
+            writer.add_scalar('Train/Confidence_loss', loss_conf, epoch*epoch_len + img_nr)
 
-    # eval stuff
-    # model, eval_loader, criterion, writer/out_losses
-    model.eval()
-    loss_ls = []
-    loss_coord_ls = []
-    loss_conf_ls = []
-    for te_iter, te_batch in enumerate(eval_loader):
-        te_image, te_label = te_batch
-        num_sample = len(te_label)
-        if torch.cuda.is_available() and useCuda:
-            te_image = te_image.cuda()
-        with torch.no_grad():
-            te_logits = model(te_image)
-            batch_loss, batch_loss_coord, batch_loss_conf = criterion(te_logits, te_label)
-        loss_ls.append(batch_loss * num_sample)
-        loss_coord_ls.append(batch_loss_coord * num_sample)
-        loss_conf_ls.append(batch_loss_conf * num_sample)
-        break
-    te_loss = sum(loss_ls) / eval_set.__len__()
-    te_coord_loss = sum(loss_coord_ls) / eval_set.__len__()
-    te_conf_loss = sum(loss_conf_ls) / eval_set.__len__()
-    print('{}  {}   {}'.format(te_loss, te_coord_loss, te_conf_loss))
-    writer.add_scalar('Test/Total_loss', te_loss, i)
-    writer.add_scalar('Test/Coordination_loss', te_coord_loss, i)
-    writer.add_scalar('Test/Confidence_loss', te_conf_loss, i)
+        # eval stuff
+        # model, eval_loader, criterion, writer/out_losses
+        model.eval()
+        loss_ls = []
+        loss_coord_ls = []
+        loss_conf_ls = []
+        for te_iter, te_batch in enumerate(eval_loader):
+            te_image, te_label = te_batch
+            num_sample = len(te_label)
+            if torch.cuda.is_available() and useCuda:
+                te_image = te_image.cuda()
+            with torch.no_grad():
+                te_logits = model(te_image)
+                batch_loss, batch_loss_coord, batch_loss_conf = criterion(te_logits, te_label)
+            loss_ls.append(batch_loss * num_sample)
+            loss_coord_ls.append(batch_loss_coord * num_sample)
+            loss_conf_ls.append(batch_loss_conf * num_sample)
+        te_loss = sum(loss_ls) / eval_set.__len__()
+        te_coord_loss = sum(loss_coord_ls) / eval_set.__len__()
+        te_conf_loss = sum(loss_conf_ls) / eval_set.__len__()
+        print('{}  {}   {}'.format(te_loss, te_coord_loss, te_conf_loss))
+        writer.add_scalar('Test/Total_loss', te_loss, epoch)
+        writer.add_scalar('Test/Coordination_loss', te_coord_loss, epoch)
+        writer.add_scalar('Test/Confidence_loss', te_conf_loss, epoch)
+        torch.save({'epoch': epoch, 'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict()},
+                   opt.log_path+'/snapshot{:4d}.tar'.format(epoch))
 
 
     writer.export_scalars_to_json(log_path + os.sep + "all_logs.json")
     writer.close()
-    torch.save(model.state_dict(), '/home/marc/Documents/projects/ADL4CV_project/models/my_test_model/model_state_dict.pt')
+    #torch.save(model.state_dict(), '/home/marc/Documents/projects/ADL4CV_project/models/my_test_model/model_state_dict.pt')
 
     '''# actual training
     num_iter_per_epoch = len(training_generator)
