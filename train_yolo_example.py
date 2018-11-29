@@ -51,14 +51,18 @@ def get_args():
     return args
 
 
-def train(opt):
+def train():
     useCuda = True
     # setup train and eval set
     if torch.cuda.is_available() and useCuda:
         torch.cuda.manual_seed(123)
     else:
         torch.manual_seed(123)
-
+    opt.batch_size = 10
+    opt.reduction = 32
+    opt.num_epoches = 3
+    opt.momentum = 0.9
+    opt.decay = 0.0005
     opt.image_size = 416  #todo hardcoded bad
     dataset_file = 'dataset_utils/Mot17_test_single.txt'
     #dataset_file = 'dataset_utils/Mot17_1_video.txt'
@@ -108,7 +112,6 @@ def train(opt):
     criterion = yloss(training_set.num_classes, model.anchors, opt.reduction)
     #  optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(opt.momentum, 0.999), weight_decay=opt.decay)
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-5, momentum=opt.momentum, weight_decay=opt.decay)
-    opt.num_epoches = 3
     epoch_len = len(training_loader)
     for epoch in range(opt.num_epoches):
         print('num epoch: {:4d}'.format(epoch))
@@ -169,4 +172,4 @@ def train(opt):
 
 if __name__ == "__main__":
     opt = get_args()
-    train(opt)
+    train()
