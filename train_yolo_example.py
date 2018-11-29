@@ -51,7 +51,19 @@ def get_args():
     return args
 
 
+class Opt(object):
+    def __init__(self):
+        self.batch_size = 10
+        self.reduction = 32
+        self.num_epoches = 3
+        self.momentum = 0.9
+        self.decay = 0.0005
+        self.image_size = 416
+        self.log_path = './log/test'
+        self.pre_trained_model_path = './models/yolo80_coco.pt'
+
 def train():
+    opt = Opt()
     useCuda = True
     # setup train and eval set
     if torch.cuda.is_available() and useCuda:
@@ -171,5 +183,5 @@ def train():
 
 
 if __name__ == "__main__":
-    opt = get_args()
+    #opt = get_args()
     train()
