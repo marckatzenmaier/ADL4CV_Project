@@ -1,7 +1,7 @@
-datasets/MOT17-02-SDP/
-datasets/MOT17-04-SDP/
-datasets/MOT17-05-SDP/
-datasets/MOT17-09-SDP/
-datasets/MOT17-10-SDP/
-datasets/MOT17-11-SDP/
-datasets/MOT17-13-SDP/
+datasets/MOT17/MOT17-02-SDP/
+datasets/MOT17/MOT17-04-SDP/
+datasets/MOT17/MOT17-05-SDP/
+datasets/MOT17/MOT17-09-SDP/
+datasets/MOT17/MOT17-10-SDP/
+datasets/MOT17/MOT17-11-SDP/
+datasets/MOT17/MOT17-13-SDP/

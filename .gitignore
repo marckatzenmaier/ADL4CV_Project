@@ -105,3 +105,6 @@ venv.bak/
 
 
 .idea
+log/*/*.tar
+dataset_utils/datasets/MOT17/*
+models/*
