@@ -3,6 +3,8 @@ from torchvision.datasets.folder import default_loader
 import dataset_utils.MOT_utils as motu
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
+import os
 
 
 class MotBBSequence(Dataset):
@@ -33,13 +35,9 @@ class MotBBSequence(Dataset):
 
         for i, path in enumerate(paths):
             # gt format: [frame id 4 box parameter]
-            #tmp debug until i download the dataset
-            path = '../../' + path
-            #tmp
             # get ground truth (gt)
             gt, info = motu.get_gt_info(path)
             num_frames = info.seqLength
-            print("Framerate:{}".format(info.frameRate))
 
             # remove everything that is not a pedestrian
             cond = np.vstack([(gt[:, 7] == 1).reshape(1, -1), (gt[:, 7] == 7).reshape(1, -1)]).T
@@ -67,7 +65,6 @@ class MotBBSequence(Dataset):
             gt[pos_ids_x, 4] = info.imWidth - gt[pos_ids_x, 2] - 1  # equal would also be bad
             gt[pos_ids_y, 5] = info.imHeight - gt[pos_ids_y, 3] - 1
 
-
             # resize boxes and normalize data
             height_scale = info.imHeight / new_height
             width_scale = info.imWidth / new_width
@@ -79,7 +76,7 @@ class MotBBSequence(Dataset):
             max_ped_id = int(np.max(gt[:, 1]))  # ids start at 1
             # for each id calc the number of sample
             traj_lengths = np.zeros(max_ped_id)
-            displacments = np.zeros(max_ped_id)
+            displacements = np.zeros(max_ped_id)
             for ped_id in range(max_ped_id):
                 ids = np.where(gt[:, 1] == ped_id+1)[0]
                 # trajectory length
@@ -87,11 +84,11 @@ class MotBBSequence(Dataset):
                 # displacement from begin to end
                 start = gt[ids[0], 2:4]
                 end = gt[ids[-1], 2:4]
-                if np.sqrt(np.sum(np.square(start-end))) > 416:
-                    print(start, end)
-                displacments[ped_id] = np.sqrt(np.sum(np.square(start-end)))
+                #if np.sqrt(np.sum(np.square(start-end))) > 416:
+                #    print(start, end)
+                displacements[ped_id] = np.sqrt(np.sum(np.square(start-end)))
             all_traj_lengths = np.concatenate([all_traj_lengths, traj_lengths])
-            all_displacements = np.concatenate([all_displacements, displacments])
+            all_displacements = np.concatenate([all_displacements, displacements])
 
             # create structure
             # create 10 frame gap between train and valid data
@@ -107,52 +104,10 @@ class MotBBSequence(Dataset):
                 videos_valid[i][j] = gt[np.where(gt[:, 0] == j + train_test_split_idx)]
 
         # [batch_size, seq_index, (id bb)]
-        # first idea : assume each frame has at maximum 120 (calc it in stats)
-        self.sequences = []  # contains train and valid sequences
-        # todo place the stuff below into a function with a good name
-        for video in videos_train.keys():  # todo look up whether .keys returns sorted list
-            video_len = len(videos_train[video])
-
-            start_index = 0
-            while True:
-                sequence = np.zeros([seq_length, 120, 5])  # 120 boxes with 5 parameter
-                if start_index + seq_length < video_len:
-                    sub_sequence = videos_train[video][start_index: start_index + seq_length]
-                    for j in range(seq_length):
-                        sequence[j, :sub_sequence[j].shape[0], :] = sub_sequence[j][:, 1:6]
-                    ## test
-                    # assume ped id starts at 1
-                    ped_ids_from_first_frame = sequence[0, np.where(sequence[0, :, 0] != 0), 0]
-                    not_remaining_ped_idx = np.logical_not(np.isin(sequence[:, :, 0], ped_ids_from_first_frame))
-                    sequence[not_remaining_ped_idx] = 0
-                    ## test
-                    self.sequences.append(sequence)
-                    start_index += step
-                else:
-                    print("finished video {} at index {}/{}".format(video, start_index+seq_length, video_len))
-                    break
+        # self.sequences contains train+valid
+        self.sequences = self._intermediate_to_final(videos_train, seq_length, step)
         self.valid_begin = len(self.sequences)  # important for datasplit with data.subset
-        for video in videos_valid.keys():
-            video_len = len(videos_valid[video])
-
-            start_index = 0
-            while True:
-                sequence = np.zeros([seq_length, 120, 5])  # 120 boxes with 5 parameter
-                if start_index + seq_length < video_len:
-                    sub_sequence = videos_valid[video][start_index: start_index + seq_length]
-                    for j in range(seq_length):
-                        sequence[j, :sub_sequence[j].shape[0], :] = sub_sequence[j][:, 1:6]
-
-                    # assume ped id starts at 1
-                    ped_ids_from_first_frame = sequence[0, np.where(sequence[0, :, 0] != 0), 0]
-                    not_remaining_ped_idx = np.logical_not(np.isin(sequence[:, :, 0], ped_ids_from_first_frame))
-                    sequence[not_remaining_ped_idx] = 0
-
-                    self.sequences.append(sequence)
-                    start_index += step
-                else:
-                    print("finished video {} at index {}/{}".format(video, start_index + seq_length, video_len))
-                    break
+        self.sequences += self._intermediate_to_final(videos_valid, seq_length, step)
 
         # print stats
         all_traj_lengths = all_traj_lengths[1:]  # first element is dummy
@@ -165,6 +120,33 @@ class MotBBSequence(Dataset):
         print("Deviation of displacements: {}".format(np.std(all_displacements)))
         print("Max displacement: {}".format(np.max(all_displacements)))
         print("Min displacement: {}".format(np.min(all_displacements)))
+
+    @staticmethod
+    def _intermediate_to_final(videos, seq_length, step):
+        # first idea : assume each frame has at maximum 120 (calc it in stats)
+        local_sequences = []
+        for video in videos.keys():  # todo look up whether .keys returns sorted list
+            video_len = len(videos[video])
+
+            start_index = 0
+            while True:
+                sequence = np.zeros([seq_length, 120, 5])  # 120 boxes with 5 parameter
+                if start_index + seq_length < video_len:
+                    sub_sequence = videos[video][start_index: start_index + seq_length]
+                    for j in range(seq_length):
+                        sequence[j, :sub_sequence[j].shape[0], :] = sub_sequence[j][:, 1:6]
+                    ## test
+                    # assume ped id starts at 1
+                    ped_ids_from_first_frame = sequence[0, np.where(sequence[0, :, 0] != 0), 0]
+                    not_remaining_ped_idx = np.logical_not(np.isin(sequence[:, :, 0], ped_ids_from_first_frame))
+                    sequence[not_remaining_ped_idx] = 0
+                    ## test
+                    local_sequences.append(sequence)
+                    start_index += step
+                else:
+                    print("finished video {} at index {}/{}".format(video, start_index+seq_length, video_len))
+                    break
+        return local_sequences
 
     def __getitem__(self, index):
         """
@@ -187,7 +169,6 @@ if __name__ == "__main__":
     test_data = MotBBSequence('../Mot17_test_single.txt')
     # draw boxes in black image
     test_sequence = test_data[0][0]
-    print(test_sequence.shape)
     for i in range(19):
         boxes = test_sequence[i]
         image = np.zeros((416, 416), dtype=np.uint8)
