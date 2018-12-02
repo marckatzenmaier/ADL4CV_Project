@@ -53,7 +53,7 @@ def get_args():
 
 class Opt(object):
     def __init__(self):
-        self.batch_size = 10
+        self.batch_size = 1
         self.reduction = 32
         self.num_epoches = 3
         self.momentum = 0.9
@@ -61,33 +61,28 @@ class Opt(object):
         self.image_size = 416
         self.log_path = './log/test'
         self.pre_trained_model_path = './models/yolo80_coco.pt'
+        self.dataset_file = 'dataset_utils/Mot17_test_single.txt'
+        self.learning_rate = 1e-6
+        self.useCuda = True
 
-def train():
-    opt = Opt()
-    useCuda = True
+
+def train(opt):
+    #opt = Opt()
+    useCuda = opt.useCuda
     # setup train and eval set
     if torch.cuda.is_available() and useCuda:
         torch.cuda.manual_seed(123)
     else:
         torch.manual_seed(123)
-    opt.batch_size = 10
-    opt.reduction = 32
-    opt.num_epoches = 3
-    opt.momentum = 0.9
-    opt.decay = 0.0005
-    opt.image_size = 416  #todo hardcoded bad
-    dataset_file = 'dataset_utils/Mot17_test_single.txt'
-    #dataset_file = 'dataset_utils/Mot17_1_video.txt'
-    trans = torchvision.transforms.Compose([torchvision.transforms.Resize((opt.image_size, opt.image_size))])
-    training_set = MOT_bb_singleframe(dataset_file, transform=trans)
-    training_loader = DataLoader(training_set, shuffle=True)
 
-    eval_set = MOT_bb_singleframe_eval(dataset_file, transform=trans)
-    eval_loader = DataLoader(eval_set)
+    trans = torchvision.transforms.Compose([torchvision.transforms.Resize((opt.image_size, opt.image_size))])
+    training_set = MOT_bb_singleframe(opt.dataset_file, transform=trans)
+    training_loader = DataLoader(training_set, batch_size=opt.batch_size, shuffle=True, num_workers=1)
+
+    eval_set = MOT_bb_singleframe_eval(opt.dataset_file, transform=trans)
+    eval_loader = DataLoader(eval_set, batch_size=opt.batch_size)
 
     # load the model
-    opt.log_path = './log/test'
-    opt.pre_trained_model_path = './models/yolo80_coco.pt'
     # save convention: https://pytorch.org/tutorials/beginner/saving_loading_models.html
     load_strict = False
     model = Yolo(0, anchors=[(6.88, 27.44), (11.93, 58.32), (19.90, 94.92), (40.00, 195.84), (97.96, 358.62)])
@@ -122,22 +117,42 @@ def train():
 
     # loss and optimizer
     criterion = yloss(training_set.num_classes, model.anchors, opt.reduction)
-    #  optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(opt.momentum, 0.999), weight_decay=opt.decay)
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-5, momentum=opt.momentum, weight_decay=opt.decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=opt.learning_rate, betas=(opt.momentum, 0.999), weight_decay=opt.decay)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=opt.learning_rate, momentum=opt.momentum, weight_decay=opt.decay)
     epoch_len = len(training_loader)
+    #timing stuff for speed eval
+    load_img = []
+    run_network =[]
+    run_loss=[]
+    optim_backward = []
+    log_time = []
     for epoch in range(opt.num_epoches):
         print('num epoch: {:4d}'.format(epoch))
         model.train()
+        #temp_time = time.time()
         for img_nr, (img, gt) in enumerate(training_loader):
             if torch.cuda.is_available() and useCuda:
                 img = Variable(img.cuda(), requires_grad=True)
             else:
                 img = Variable(img, requires_grad=True)
+            #load_img.append(time.time()-temp_time)
             optimizer.zero_grad()
+            #temp_time = time.time()
             logits = model(img)
+            #run_network.append(time.time()-temp_time)
+            #temp_time = time.time()
             loss, loss_coord, loss_conf = criterion(logits, gt)
+            #run_loss.append(time.time()-temp_time)
+            #temp_time = time.time()
+            nr = epoch*epoch_len + img_nr
+            writer.add_scalar('Train/Total_loss', loss.item(), nr)
+            writer.add_scalar('Train/Coordination_loss', loss_coord.item(), nr)
+            writer.add_scalar('Train/Confidence_loss', loss_conf.item(), nr)
+            #log_time.append(time.time()-temp_time)
+            temp_time = time.time()
             loss.backward()
             optimizer.step()
+            #optim_backward.append(time.time()-temp_time)
             if img_nr % 100 == 0:
                 print('Iteration {0:7d} loss: {1:8.4f}, \tcoord_loss: {2:8.4f}, \tconf_loss: {3:8.4f}'
                       .format(epoch*epoch_len + img_nr,
@@ -145,10 +160,17 @@ def train():
                               loss_coord.detach().cpu().numpy(),
                               loss_conf.detach().cpu().numpy()))
 
-            writer.add_scalar('Train/Total_loss', loss, epoch*epoch_len + img_nr)
-            writer.add_scalar('Train/Coordination_loss', loss_coord, epoch*epoch_len + img_nr)
-            writer.add_scalar('Train/Confidence_loss', loss_conf, epoch*epoch_len + img_nr)
-
+            #if img_nr > 99:
+            #    break
+            #time.sleep(1)
+            #temp_time = time.time()
+        print('load_time: {}'.format(np.mean(np.array(load_img))))
+        print('network_time: {}'.format(np.mean(np.array(run_network))))
+        print('loss_time: {}'.format(np.mean(np.array(run_loss))))
+        print('optim_time: {}'.format(np.mean(np.array(optim_backward))))
+        print('log_time: {}'.format(np.mean(np.array(log_time))))
+        #writer.close()
+        #exit()
         # eval stuff
         # model, eval_loader, criterion, writer/out_losses
         model.eval()
@@ -170,9 +192,9 @@ def train():
         te_coord_loss = sum(loss_coord_ls) / eval_set.__len__()
         te_conf_loss = sum(loss_conf_ls) / eval_set.__len__()
         print('{}  {}   {}'.format(te_loss, te_coord_loss, te_conf_loss))
-        writer.add_scalar('Test/Total_loss', te_loss, epoch)
-        writer.add_scalar('Test/Coordination_loss', te_coord_loss, epoch)
-        writer.add_scalar('Test/Confidence_loss', te_conf_loss, epoch)
+        writer.add_scalar('Test/Total_loss', te_loss, epoch*epoch_len)
+        writer.add_scalar('Test/Coordination_loss', te_coord_loss, epoch*epoch_len)
+        writer.add_scalar('Test/Confidence_loss', te_conf_loss, epoch*epoch_len)
         torch.save({'epoch': epoch, 'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict()},
                    opt.log_path+'/snapshot{:04d}.tar'.format(epoch))
@@ -184,4 +206,5 @@ def train():
 
 if __name__ == "__main__":
     #opt = get_args()
-    train()
+    opt = Opt()
+    train(opt)
