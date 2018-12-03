@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import os
+from scipy import misc
 
 
 class MotBBSequence(Dataset):
@@ -13,7 +14,7 @@ class MotBBSequence(Dataset):
     """
 
     def __init__(self, paths_file, loader=default_loader, seq_length=20, new_height=416, new_width=416, step=5,
-                 valid_ratio=0.2):
+                 valid_ratio=0.2, use_only_first_video=False):
         """
         inits of all file names and bounding boxes
         """
@@ -27,13 +28,17 @@ class MotBBSequence(Dataset):
 
         #            dict    list  list
         # tmp format video->frame->boxes with id
-        videos_train = {i: [] for i in range(len(paths))}
-        videos_valid = {i: [] for i in range(len(paths))}
+        test = {"gt": []
+            , "path":""}
+        videos_train = {i: {"gt": [], "path": ""} for i in range(len(paths))}
+        videos_valid = {i: {"gt": [], "path": ""} for i in range(len(paths))}
         # stats stuff
         all_traj_lengths = np.zeros(1)
         all_displacements = np.zeros(1)
 
         for i, path in enumerate(paths):
+            if i != 0 and use_only_first_video:
+                break
             # gt format: [frame id 4 box parameter]
             # get ground truth (gt)
             gt, info = motu.get_gt_info(path)
@@ -96,19 +101,24 @@ class MotBBSequence(Dataset):
             num_train_frames = train_test_split_idx - 10
             num_valid_frames = num_frames - train_test_split_idx
 
-            videos_train[i] = [None for j in range(num_train_frames)]
+            videos_train[i]["gt"] = [None for j in range(num_train_frames)]
+            videos_train[i]["path"] = path + "img1/"
             for j in range(num_train_frames):
-                videos_train[i][j] = gt[np.where(gt[:, 0] == j)]
-            videos_valid[i] = [None for j in range(num_valid_frames)]
+                videos_train[i]["gt"][j] = gt[np.where(gt[:, 0] == j)]
+            videos_valid[i]["gt"] = [None for j in range(num_valid_frames)]
+            videos_valid[i]["path"] = path + "img1/"
             for j in range(num_valid_frames):
-                videos_valid[i][j] = gt[np.where(gt[:, 0] == j + train_test_split_idx)]
+                videos_valid[i]["gt"][j] = gt[np.where(gt[:, 0] == j + train_test_split_idx)]
 
-        # [batch_size, seq_index, (id bb)]
+        # [batch_size, seq_index, (id bb)]: goal
         # self.sequences contains train+valid
-        self.sequences = self._intermediate_to_final(videos_train, seq_length, step)
+        # each element of sequence is [seq_length, 120, 5]
+        # for debug frame_sequences contains list with source path of the corresponding image
+        self.sequences, self.frame_paths = self._intermediate_to_final(videos_train, seq_length, step)
         self.valid_begin = len(self.sequences)  # important for datasplit with data.subset
-        self.sequences += self._intermediate_to_final(videos_valid, seq_length, step)
-
+        valid_seq, valid_frames = self._intermediate_to_final(videos_valid, seq_length, step)
+        self.sequences += valid_seq
+        self.frame_paths += valid_frames
         # print stats
         all_traj_lengths = all_traj_lengths[1:]  # first element is dummy
         print("Mean trajectory length: {}".format(np.mean(all_traj_lengths)))
@@ -125,28 +135,33 @@ class MotBBSequence(Dataset):
     def _intermediate_to_final(videos, seq_length, step):
         # first idea : assume each frame has at maximum 120 (calc it in stats)
         local_sequences = []
+        local_images = [] #'{0:03d}'.format(n)
         for video in videos.keys():  # todo look up whether .keys returns sorted list
-            video_len = len(videos[video])
+            video_len = len(videos[video]["gt"])
 
             start_index = 0
             while True:
                 sequence = np.zeros([seq_length, 120, 5])  # 120 boxes with 5 parameter
+                frames = []
                 if start_index + seq_length < video_len:
-                    sub_sequence = videos[video][start_index: start_index + seq_length]
+                    sub_sequence = videos[video]["gt"][start_index: start_index + seq_length]
                     for j in range(seq_length):
                         sequence[j, :sub_sequence[j].shape[0], :] = sub_sequence[j][:, 1:6]
-                    ## test
+                        # images are named by starting from 1
+                        frames.append(videos[video]["path"]  + "{0:06d}".format(start_index + j + 1) + ".jpg")
+                    ## test remove appearing pedestrians
                     # assume ped id starts at 1
                     ped_ids_from_first_frame = sequence[0, np.where(sequence[0, :, 0] != 0), 0]
                     not_remaining_ped_idx = np.logical_not(np.isin(sequence[:, :, 0], ped_ids_from_first_frame))
                     sequence[not_remaining_ped_idx] = 0
                     ## test
                     local_sequences.append(sequence)
+                    local_images.append(frames)
                     start_index += step
                 else:
                     print("finished video {} at index {}/{}".format(video, start_index+seq_length, video_len))
                     break
-        return local_sequences
+        return local_sequences, local_images
 
     def __getitem__(self, index):
         """
@@ -158,20 +173,28 @@ class MotBBSequence(Dataset):
         # todo seq_length 20 means that the 20th sample is only used as a target
         return self.sequences[index][:-1], self.sequences[index][1:]
 
+    def get_image_paths(self, index):
+        return self.frame_paths[index][:-1], self.frame_paths[index][1:]
+
     def __len__(self):
         """
         len of the dataset
         """
         return len(self.sequences)
 
+
 if __name__ == "__main__":
     # debug
-    test_data = MotBBSequence('../Mot17_test_single.txt')
+    os.chdir("D:/Nikita/Documents/Projekte/ADL4CV_Project")
+    test_data = MotBBSequence('dataset_utils/Mot17_test_single.txt')
     # draw boxes in black image
     test_sequence = test_data[0][0]
+    frame_paths = test_data.get_image_paths(0)[0]
     for i in range(19):
         boxes = test_sequence[i]
-        image = np.zeros((416, 416), dtype=np.uint8)
+        image = misc.imread(frame_paths[i])
+        image = misc.imresize(image, (416, 416))
+        #image = np.zeros((416, 416), dtype=np.uint8)
 
         for box in range(120):
             if np.sum(boxes[box, 1:]) != 0:
