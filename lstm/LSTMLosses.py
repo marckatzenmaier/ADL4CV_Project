@@ -5,6 +5,78 @@ import torch.functional as f
 import os
 
 
+def prediction_to_box_list(pred_sequence):
+    box_list = []
+    for pred in pred_sequence:
+        # goal (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
+        input, div, target = pred
+
+
+        batch_size = input.shape[0]
+
+        # todo handle the case with vanishing boxes
+        # todo idea all valid boxes are contained in target -> if a box vanishes it is not in target !! use target for
+        # todo valid boxes
+
+        # input wieder de normalisieren mach ich nicht hier
+        # pred shape: (batch, grid, grid, anchor, 4)
+        output = input.copy()
+        output[:, :, :, :, 1:] += div
+        output[:, :, :, :, 0] = target[:, :, :, :, 0]
+        output[output[:, :, :, :, 0] == 0] = 0
+
+        output = output.reshape(batch_size, -1, 5)
+        input = input.reshape(batch_size, -1, 5)
+        target = target.reshape(batch_size, -1, 5)
+        box_list.append((input, output, target))
+    return box_list
+
+
+def displacement_error(pred_box_list, metric):
+    # take last element of sequence and compare them
+    # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
+    input, output, target = pred_box_list[-1]
+
+    error = []
+    for batch_id in range(len(target)):
+        for box, box_id in enumerate(target[batch_id, :, 0]):
+            if box_id != 0:
+                target_box = np.where(output[batch_id, :, 0] == box_id)
+                if len(target_box[0]) == 0:
+                    print(np.unique(output[batch_id, :, 0]))
+                    print(np.unique(input[batch_id, :, 0]))
+                    print(np.unique(target[batch_id, :, 0]))
+                target_box = output[batch_id, target_box[0][0], 1:]
+                error.append(metric(target_box, target[batch_id, box, 1:]))
+    return np.mean(error)
+
+
+def mean_squared_trajectory_error(pred_box_list, metric):
+    # take last element of sequence and compare them
+    # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
+    _, output, target = pred_box_list[-1]
+
+    error = []
+    for frame in pred_box_list:
+        _, output, target = frame
+        for batch_id in range(len(target)):
+            for box, box_id in enumerate(target[batch_id, :, 0]):
+                target_box = np.where(output[batch_id, :, 0] == box_id)
+                target_box = output[batch_id, target_box, 1:]
+                error.append(metric(target_box, target[batch_id, box, 1:]))
+
+#def iou(box_1, box_2):
+#
+#    intersections = dx * dy
+#    areas = (x2 - x1) * (y2 - y1)
+#    unions = (areas + areas.t()) - intersections
+#    ious = intersections / unions
+
+
+def center_distance(box_1, box_2):
+    return np.sqrt(np.sum(np.square(box_1[:2] - box_2[:2])))
+
+
 class NaiveLoss(nn.modules.loss._Loss):
 
     def __init__(self, params):
@@ -17,14 +89,15 @@ class NaiveLoss(nn.modules.loss._Loss):
     def forward(self, pred, input, target):
         # calc mask because only cells/anchors with boxes are penalized
         # mask shape (batch_size, gridy, gridx, anchor)
-        mask = (input[:, :, :, :, 0] != 0)
+        # todo handle the case with vanishing boxes
+        # todo idea all valid boxes are contained in target -> if a box vanishes it is not in target !! use target for
+        # todo valid boxes
+        mask = input[:, :, :, :, 0] != 0
         mask = torch.unsqueeze(torch.Tensor(mask.astype(np.int)), 4)
 
         input = torch.Tensor(input[:, :, :, :, 1:])
         target = torch.Tensor(target[:, :, :, :, 1:])
-
-
-        return torch.sum(mask * torch.pow((target - input + pred), 2))
+        return torch.sum(mask * torch.pow((target - input - pred), 2)) / torch.nonzero(mask).size(0)
 
     def to_yolo(self, input, target):
         """
