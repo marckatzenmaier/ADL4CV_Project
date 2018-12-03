@@ -8,8 +8,8 @@ class SequenceClassifier(nn.Module):
     def __init__(self, input_size, output_size, batch_size_init):
         super(SequenceClassifier, self).__init__()
         # layer parameter
-        self.lstm_input_size = 1024
-        self.hidden_dim = 1024
+        self.lstm_input_size = 128
+        self.hidden_dim = 128
         # todo 2-3 conv layer
         # lstm cell
         self.feature_transform = nn.Linear(np.prod(input_size), self.lstm_input_size)
