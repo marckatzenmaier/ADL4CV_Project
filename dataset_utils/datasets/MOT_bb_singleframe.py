@@ -3,6 +3,7 @@ from torchvision.datasets.folder import default_loader
 import dataset_utils.MOT_utils as motu
 import numpy as np
 import torchvision.transforms as trans
+import torch
 
 class MOT_bb_singleframe(Dataset):
     """
@@ -40,7 +41,7 @@ class MOT_bb_singleframe(Dataset):
         and choose the right bb frame
         """
         target = motu.filter_gt(self.all_gt, index)
-        target = target[:, 1:]
+        target = torch.from_numpy(target[:, 1:])
         sample = self.loader(self.all_imagepaths[index])
         width, height = sample.size
         if self.transform is not None:
@@ -55,6 +56,7 @@ class MOT_bb_singleframe(Dataset):
                 target = motu.resize_bb(target, height_scale, width_scale)
         elif self.target_transform is not None:
             target = self.target_transform(target)
+
         return sample, target
 
     def __len__(self):
@@ -101,7 +103,7 @@ class MOT_bb_singleframe_eval(Dataset):
         and choose the right bb frame
         """
         target = motu.filter_gt(self.all_gt, index)
-        target = target[:, 1:]
+        target = torch.from_numpy(target[:, 1:])
         sample = self.loader(self.all_imagepaths[index])
         width, height = sample.size
         if self.transform is not None:
@@ -116,6 +118,7 @@ class MOT_bb_singleframe_eval(Dataset):
                 target = motu.resize_bb(target, height_scale, width_scale)
         elif self.target_transform is not None:
             target = self.target_transform(target)
+
         return sample, target
 
     def __len__(self):
