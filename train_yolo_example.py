@@ -64,6 +64,7 @@ class Opt(object):
         self.dataset_file = 'dataset_utils/Mot17_test_single.txt'
         self.learning_rate = 1e-6
         self.useCuda = True  # for easy disabeling cuda
+        self.num_workers = 4
         self.reinitailise_last_layer = True
         self.model = None
         self.criterion = None
@@ -77,11 +78,12 @@ def writeLossToSummary(writer, prefix, loss, loss_coord, loss_conf, index):
 def loadTrainEvalSet(opt):
     trans = torchvision.transforms.Compose([torchvision.transforms.Resize((opt.image_size, opt.image_size))])
     training_set = MOT_bb_singleframe(opt.dataset_file, transform=trans)
-    training_loader = DataLoader(training_set, batch_size=opt.batch_size, shuffle=True, num_workers=1,
+    training_loader = DataLoader(training_set, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers,
                                  collate_fn=custom_collate_fn)
 
     eval_set = MOT_bb_singleframe_eval(opt.dataset_file, transform=trans)
-    eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, collate_fn=custom_collate_fn)
+    eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, num_workers=opt.num_workers,
+                             collate_fn=custom_collate_fn)
     return training_set, training_loader, eval_set, eval_loader
 
 
@@ -192,6 +194,7 @@ def train(opt):
         #print('log_time: {}'.format(np.mean(np.array(log_time))))
         #writer.close()
         #exit()
+
         # eval stuff
 
         # model, eval_loader, criterion, writer/out_losses
@@ -232,7 +235,7 @@ def train(opt):
 if __name__ == "__main__":
     #opt = get_args()
     opt = Opt()
-    opt.useCuda = False
+    opt.useCuda = True
     opt.learning_rate = 1e-5
     opt.batch_size = 1
     opt.model = Yolo(0, anchors=[(6.88, 27.44), (11.93, 58.32), (19.90, 94.92), (40.00, 195.84), (97.96, 358.62)])
