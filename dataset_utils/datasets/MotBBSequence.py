@@ -32,6 +32,7 @@ class MotBBSequence(Dataset):
             , "path":""}
         videos_train = {i: {"gt": [], "path": ""} for i in range(len(paths))}
         videos_valid = {i: {"gt": [], "path": ""} for i in range(len(paths))}
+        frame_offsets = []
         # stats stuff
         all_traj_lengths = np.zeros(1)
         all_displacements = np.zeros(1)
@@ -98,6 +99,7 @@ class MotBBSequence(Dataset):
             # create structure
             # create 10 frame gap between train and valid data
             train_test_split_idx = int(num_frames * (1.0 - valid_ratio))
+            frame_offsets.append(train_test_split_idx)
             num_train_frames = train_test_split_idx - 10
             num_valid_frames = num_frames - train_test_split_idx
 
@@ -116,7 +118,7 @@ class MotBBSequence(Dataset):
         # for debug frame_sequences contains list with source path of the corresponding image
         self.sequences, self.frame_paths = self._intermediate_to_final(videos_train, seq_length, step)
         self.valid_begin = len(self.sequences)  # important for datasplit with data.subset
-        valid_seq, valid_frames = self._intermediate_to_final(videos_valid, seq_length, step)
+        valid_seq, valid_frames = self._intermediate_to_final(videos_valid, seq_length, step, frame_offsets)
         self.sequences += valid_seq
         self.frame_paths += valid_frames
         # print stats
@@ -132,10 +134,10 @@ class MotBBSequence(Dataset):
         print("Min displacement: {}".format(np.min(all_displacements)))
 
     @staticmethod
-    def _intermediate_to_final(videos, seq_length, step):
+    def _intermediate_to_final(videos, seq_length, step, frame_offsets=None):
         # first idea : assume each frame has at maximum 120 (calc it in stats)
         local_sequences = []
-        local_images = [] #'{0:03d}'.format(n)
+        local_images = []
         for video in videos.keys():  # todo look up whether .keys returns sorted list
             video_len = len(videos[video]["gt"])
 
@@ -148,13 +150,17 @@ class MotBBSequence(Dataset):
                     for j in range(seq_length):
                         sequence[j, :sub_sequence[j].shape[0], :] = sub_sequence[j][:, 1:6]
                         # images are named by starting from 1
-                        frames.append(videos[video]["path"]  + "{0:06d}".format(start_index + j + 1) + ".jpg")
-                    ## test remove appearing pedestrians
+                        if frame_offsets is not None:
+                            frames.append(videos[video]["path"] + "{0:06d}".format(
+                                start_index + j + 1 + frame_offsets[video]) + ".jpg")
+                        else:
+                            frames.append(videos[video]["path"] + "{0:06d}".format(start_index + j + 1) + ".jpg")
+                    # remove appearing pedestrians
                     # assume ped id starts at 1
                     ped_ids_from_first_frame = sequence[0, np.where(sequence[0, :, 0] != 0), 0]
                     not_remaining_ped_idx = np.logical_not(np.isin(sequence[:, :, 0], ped_ids_from_first_frame))
                     sequence[not_remaining_ped_idx] = 0
-                    ## test
+
                     local_sequences.append(sequence)
                     local_images.append(frames)
                     start_index += step
@@ -171,7 +177,8 @@ class MotBBSequence(Dataset):
         
         """
         # todo seq_length 20 means that the 20th sample is only used as a target
-        return self.sequences[index][:-1], self.sequences[index][1:]
+        return self.sequences[index][:-1], self.sequences[index][1:], \
+               self.frame_paths[index][:-1], self.frame_paths[index][1:]
 
     def get_image_paths(self, index):
         return self.frame_paths[index][:-1], self.frame_paths[index][1:]
@@ -195,7 +202,7 @@ if __name__ == "__main__":
         image = misc.imread(frame_paths[i])
         image = misc.imresize(image, (416, 416))
         #image = np.zeros((416, 416), dtype=np.uint8)
-
+        print(frame_paths[i])
         for box in range(120):
             if np.sum(boxes[box, 1:]) != 0:
                 width = int(boxes[box, 3])

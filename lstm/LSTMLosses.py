@@ -5,7 +5,7 @@ import torch.functional as f
 import os
 
 
-def prediction_to_box_list(pred_sequence):
+def prediction_to_box_list(pred_sequence, valid=False):
     box_list = []
     for pred in pred_sequence:
         # goal (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
@@ -24,6 +24,11 @@ def prediction_to_box_list(pred_sequence):
         output[:, :, :, :, 1:] += div
         output[:, :, :, :, 0] = target[:, :, :, :, 0]
         output[output[:, :, :, :, 0] == 0] = 0
+        if valid:
+            print("prediction")
+            #print(div[output[:, :, :, :, 0] != 0])
+            print("truth")
+            print(target[output[:, :, :, :, 0] != 0])
 
         output = output.reshape(batch_size, -1, 5)
         input = input.reshape(batch_size, -1, 5)
@@ -92,11 +97,12 @@ class NaiveLoss(nn.modules.loss._Loss):
         # todo handle the case with vanishing boxes
         # todo idea all valid boxes are contained in target -> if a box vanishes it is not in target !! use target for
         # todo valid boxes
-        mask = input[:, :, :, :, 0] != 0
+        mask = target[:, :, :, :, 0] != 0
         mask = torch.unsqueeze(torch.Tensor(mask.astype(np.int)), 4)
 
         input = torch.Tensor(input[:, :, :, :, 1:])
         target = torch.Tensor(target[:, :, :, :, 1:])
+       #print(torch.masked_select(pred, (pred.detach() * mask.detach() > 0).byte()))
         return torch.sum(mask * torch.pow((target - input - pred), 2)) / torch.nonzero(mask).size(0)
 
     def to_yolo(self, input, target):
@@ -153,13 +159,33 @@ class NaiveLoss(nn.modules.loss._Loss):
         return grid_in, grid_target
 
     def shift(self, input, pred):
+        # input and pred are torch tensors
         # mask pred, add pred transform back to (batch, 120, 5) transform to yolo
-        mask = (input[:, :, :, :, 0] != 0)
-        mask = mask.int()
-        pred = mask * pred
+        batch_size = input.shape[0]
 
-        shifted = input + pred
+        input[:, :, :, :, 1:] += pred
+        return input
+        """input[input[:, :, :, :, 0] == 0] = 0
 
+        input = input.view(batch_size, -1, 5)
+
+        grid_in = torch.zeros([batch_size, self.grid_shape[1], self.grid_shape[0], self.num_anchors, 5])
+
+        cell_coord = np.floor(input[:, :, [1, 2]].detach().numpy()).astype(np.int)  # shape: 2 120 2
+        valid_boxes_mask = np.sum(input.detach().numpy(), axis=2) > 0
+        valid_boxes = np.where(valid_boxes_mask)  # shape 2 120
+        batch_idx = valid_boxes[0]
+        box_idx = valid_boxes[1]
+        # for the moment calc the anchor box with euclidean metric
+        # anchors shape (num_anchors, 2)
+        anchor_idx = np.argmin(  # shape: 2 120
+                     np.sum(np.abs(np.expand_dims(input[:, :, [3, 4]].detach().numpy(), axis=2) - self.anchors), axis=3), axis=2)
+        grid_y_idx = cell_coord[batch_idx, box_idx, 1]
+        grid_x_idx = cell_coord[batch_idx, box_idx, 0]
+        t = torch.masked_select(input, torch.from_numpy(valid_boxes_mask.astype(np.int)).unsqueeze(2).byte()).view(-1, 5)
+        grid_in[batch_idx, grid_y_idx, grid_x_idx, anchor_idx[valid_boxes]] = t
+
+        return grid_in"""
 
     def load_anchors(self, path):
         # normalize to grid size
