@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, Subset
 import numpy as np
 from tensorboardX import SummaryWriter
 
-from lstm.LSTMModels import SequenceClassifier
+from lstm.LSTMModels import *
 from dataset_utils.datasets.MotBBSequence import MotBBSequence
 from lstm.LSTMLosses import *
 import matplotlib.pyplot as plt
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     saving_path = "models/" + name
 
     num_epochs = 100
-    learn_rate = 1e-4
+    learn_rate = 3e-5
 
     dataset = MotBBSequence('dataset_utils/Mot17_test_single.txt', use_only_first_video=False)
     train_data = Subset(dataset, range(0, dataset.valid_begin))
@@ -83,26 +83,7 @@ if __name__ == "__main__":
                    "path_anchors": "dataset_utils/anchors/anchors5.txt"}
     loss_function = NaiveLoss(loss_params)
     model = SequenceClassifier([16, 16, loss_function.num_anchors, 4], [16, 16, loss_function.num_anchors, 4], 16)
-    optimizer = optim.Adam(model.parameters(), lr=learn_rate)
-
-    """
-    ##################################################################
-    batch_in = np.expand_dims(train_data[0][0][0], axis=0)
-    batch_out = np.expand_dims(train_data[0][1][0], axis=0)
-    yolo_in, yolo_target = loss_function.to_yolo(batch_in, batch_out)
-    pred = yolo_target[:, :, :, :, 1:] - yolo_in[:, :, :, :, 1:]
-    
-    pred_sequence = [(yolo_in, pred, yolo_target)]
-    box_list = prediction_to_box_list(pred_sequence)
-    for frame in box_list:
-        input, pred, target = frame
-        for batch_id in range(len(input)):
-            for box, box_id in enumerate(batch_out[batch_id, :, 0]):
-                target_box = np.where(pred[batch_id, :, 0] == box_id)
-                target_box = pred[batch_id, target_box, 1:] * 416.0 / 16.0
-                print(np.sum(target_box - batch_out[batch_id, box, 1:]))
-    ###################################################################
-    """
+    optimizer = optim.Adam(model.parameters(), lr=learn_rate, weight_decay=0, )
 
     niter = 0
     train_loader = DataLoader(train_data, batch_size=16, shuffle=True, num_workers=1)
@@ -115,34 +96,36 @@ if __name__ == "__main__":
             model.zero_grad()
             optimizer.zero_grad()
 
-            model.hidden = model.init_hidden(batch[0].shape[0])
-            model.cell = model.init_hidden(batch[0].shape[0])
+            model.reset_hidden(batch[0].shape[0])
 
-            bb_sequence = batch[0]
-            bb_target_sequence = batch[1]
-
-            #bb_sequence = np.expand_dims(train_data[0][0], axis=0)
-            #bb_target_sequence = np.expand_dims(train_data[0][1], axis=0)
+            bb_sequence = batch[0].detach()
+            bb_target_sequence = batch[1].detach()
 
             loss = 0
+            bb_sequence_old = bb_sequence[:, 0].numpy()
             for i in range(obs_length):
-                yolo_in, yolo_target = loss_function.to_yolo(bb_sequence[:, i].numpy(), bb_target_sequence[:, i].numpy())
-                pred = model(torch.from_numpy(yolo_in[:, :, :, :, 1:]).float())
+                _, yolo_in = loss_function.to_yolo(bb_sequence_old, bb_sequence[:, i].numpy())
+                _, yolo_target = loss_function.to_yolo(bb_sequence_old, bb_target_sequence[:, i].numpy())
+                pred = model(Variable(torch.from_numpy(yolo_in[:, :, :, :, 1:]).float()))
                 #loss += loss_function.forward(pred, yolo_in, yolo_target)
 
             prev_out = loss_function.shift(torch.from_numpy(yolo_in).float(), pred)  # todo without teacher forcing
-            bb_sequence_old = bb_sequence[:, obs_length-1].numpy()
             pred_sequence = []
+            #loss_weights = np.square(np.linspace(-pred_length//2, pred_length//2)) / (pred_length**2/4)
             for i in range(pred_length):
 
-                if niter > -1: # use your own prediction to calculate the next input from your own prediction
+                if niter >= 0:  # use your own prediction to calculate the next input from your own prediction
                     _, yolo_target = loss_function.to_yolo(bb_sequence_old, bb_target_sequence[:, obs_length + i].numpy())
                     prev_out_in = prev_out[:, :, :, :, 1:].contiguous()
-                    pred = model(prev_out_in)
-                    loss += loss_function.forward(pred, prev_out, yolo_target)
+                    pred = model(Variable(prev_out_in))
+                    loss += loss_function.forward(pred, prev_out, yolo_target)  # * loss_weights[i]
                     pred_sequence.append((prev_out.detach().numpy(), pred.detach().numpy(), yolo_target))
                     prev_out = loss_function.shift(prev_out, pred)
                 else:
+                    _, yolo_target = loss_function.to_yolo(bb_sequence_old,
+                                                           bb_target_sequence[:, obs_length + i].numpy())
+                    _, yolo_in = loss_function.to_yolo(bb_sequence_old,
+                                                           bb_sequence[:, obs_length + i].numpy())
                     pred = model(torch.from_numpy(yolo_in[:, :, :, :, 1:]).float())
                     loss += loss_function.forward(pred, yolo_in, yolo_target)
                     pred_sequence.append((yolo_in, pred.detach().numpy(), yolo_target))
@@ -155,34 +138,36 @@ if __name__ == "__main__":
 
             # logging and stats
             writer.add_scalar('train_loss', loss, niter)
+            writer.add_scalar('train_dis_error', dis_error, niter)
             print("{}: loss: {}, diss_error: {}".format(niter, loss.detach(), dis_error))
             niter += 1
 
         # validation
         model.eval()
         print("---------- ")
-        print("VALIDATION")
+        print("VALIDATION epoch {}".format(epoch))
         print("---------- ")
         loss = []
         dis_error = []
         for batch in valid_loader:
 
-            model.hidden = model.init_hidden(batch[0].shape[0])
-            model.cell   = model.init_hidden(batch[0].shape[0])
+            model.reset_hidden(batch[0].shape[0])
 
             bb_sequence = batch[0]
             bb_target_sequence = batch[1]
             target_frames = batch[3]
 
+            bb_sequence_old = bb_sequence[:, 0].numpy()
+            local_loss = 0
             for i in range(obs_length):
-                yolo_in, yolo_target = loss_function.to_yolo(bb_sequence[:, i].numpy(), bb_target_sequence[:, i].numpy())
+                _, yolo_in = loss_function.to_yolo(bb_sequence_old, bb_sequence[:, i].numpy())
+                _, yolo_target = loss_function.to_yolo(bb_sequence_old, bb_target_sequence[:, i].numpy())
                 pred = model(torch.from_numpy(yolo_in[:, :, :, :, 1:]).float())
-                # loss += loss_function.forward(pred, yolo_in, yolo_target)
+                #local_loss += loss_function.forward(pred, yolo_in, yolo_target)
 
             prev_out = loss_function.shift(torch.from_numpy(yolo_in).float(), pred)  # todo without teacher forcing
-            bb_sequence_old = bb_sequence[:, obs_length-1].numpy()
             pred_sequence = []
-            local_loss = 0
+
             for i in range(pred_length):
                 _, yolo_target = loss_function.to_yolo(bb_sequence_old, bb_target_sequence[:, obs_length + i].numpy())
                 prev_out_in = prev_out[:, :, :, :, 1:].contiguous()
@@ -193,14 +178,14 @@ if __name__ == "__main__":
             loss.append(local_loss.detach().numpy())
             box_list = prediction_to_box_list(pred_sequence, False)
             dis_error.append(displacement_error(box_list, center_distance))
-            #if epoch % 90 == 0 and epoch != 0:
-            #    draw_pred_sequence(box_list, map(lambda x: x[0], target_frames), pred_length)
+            if epoch % 80 == 0 and epoch != 0:
+                draw_pred_sequence(box_list, list(map(lambda x: x[0], target_frames)), pred_length)
 
             # logging and stats
         loss = np.mean(loss)
         dis_error = np.mean(dis_error)
         writer.add_scalar('valid_loss', loss, niter)
-        writer.add_scalar('dis_error', dis_error, niter)
+        writer.add_scalar('valid_dis_error', dis_error, niter)
         print("{}: loss: {}, dis_error: {}".format(niter, loss, dis_error))
         print("---------- ")
 

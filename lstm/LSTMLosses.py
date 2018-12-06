@@ -26,9 +26,9 @@ def prediction_to_box_list(pred_sequence, valid=False):
         output[output[:, :, :, :, 0] == 0] = 0
         if valid:
             print("prediction")
-            #print(div[output[:, :, :, :, 0] != 0])
+            print(div[output[:, :, :, :, 0] != 0])
             print("truth")
-            print(target[output[:, :, :, :, 0] != 0])
+            print(target[output[:, :, :, :, 0] != 0] - input[output[:, :, :, :, 0] != 0])
 
         output = output.reshape(batch_size, -1, 5)
         input = input.reshape(batch_size, -1, 5)
@@ -51,8 +51,8 @@ def displacement_error(pred_box_list, metric):
                     print(np.unique(output[batch_id, :, 0]))
                     print(np.unique(input[batch_id, :, 0]))
                     print(np.unique(target[batch_id, :, 0]))
-                target_box = output[batch_id, target_box[0][0], 1:]
-                error.append(metric(target_box, target[batch_id, box, 1:]))
+                target_box = output[batch_id, target_box[0][0], 1:] * 416 / 16.0
+                error.append(metric(target_box, target[batch_id, box, 1:] * 416 / 16.0))
     return np.mean(error)
 
 
@@ -165,27 +165,6 @@ class NaiveLoss(nn.modules.loss._Loss):
 
         input[:, :, :, :, 1:] += pred
         return input
-        """input[input[:, :, :, :, 0] == 0] = 0
-
-        input = input.view(batch_size, -1, 5)
-
-        grid_in = torch.zeros([batch_size, self.grid_shape[1], self.grid_shape[0], self.num_anchors, 5])
-
-        cell_coord = np.floor(input[:, :, [1, 2]].detach().numpy()).astype(np.int)  # shape: 2 120 2
-        valid_boxes_mask = np.sum(input.detach().numpy(), axis=2) > 0
-        valid_boxes = np.where(valid_boxes_mask)  # shape 2 120
-        batch_idx = valid_boxes[0]
-        box_idx = valid_boxes[1]
-        # for the moment calc the anchor box with euclidean metric
-        # anchors shape (num_anchors, 2)
-        anchor_idx = np.argmin(  # shape: 2 120
-                     np.sum(np.abs(np.expand_dims(input[:, :, [3, 4]].detach().numpy(), axis=2) - self.anchors), axis=3), axis=2)
-        grid_y_idx = cell_coord[batch_idx, box_idx, 1]
-        grid_x_idx = cell_coord[batch_idx, box_idx, 0]
-        t = torch.masked_select(input, torch.from_numpy(valid_boxes_mask.astype(np.int)).unsqueeze(2).byte()).view(-1, 5)
-        grid_in[batch_idx, grid_y_idx, grid_x_idx, anchor_idx[valid_boxes]] = t
-
-        return grid_in"""
 
     def load_anchors(self, path):
         # normalize to grid size
