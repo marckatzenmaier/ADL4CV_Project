@@ -13,7 +13,7 @@ class MotBBSequence(Dataset):
     dataset which loads each frame individual
     """
 
-    def __init__(self, paths_file, loader=default_loader, seq_length=20, new_height=416, new_width=416, step=5,
+    def __init__(self, paths_file, seq_length=20, new_height=416, new_width=416, step=5,
                  valid_ratio=0.2, use_only_first_video=False):
         """
         inits of all file names and bounding boxes
@@ -22,14 +22,15 @@ class MotBBSequence(Dataset):
         # the movement is also a problem especially if the movement changes for the prediction time
         # todo include images for debugging -> at the moment the images are too much
         # crop negative boxes (maybe not necessary)
-        self.loader = loader
+        self.seq_length = seq_length
+        self.im_size = (new_height, new_width)
+
         paths = motu.parse_videos_file(paths_file)
-        self.all_gt = np.zeros([0, 5])
 
         #            dict    list  list
         # tmp format video->frame->boxes with id
         test = {"gt": []
-            , "path":""}
+            , "path": ""}
         videos_train = {i: {"gt": [], "path": ""} for i in range(len(paths))}
         videos_valid = {i: {"gt": [], "path": ""} for i in range(len(paths))}
         frame_offsets = []
@@ -51,8 +52,8 @@ class MotBBSequence(Dataset):
             # pedestrian ids are now discontinuous which results in tougher stats calculation
             # -> calc correction and apply it
             ids = gt[:, 1]
-            ids_diff = ids[1:]-ids[:-1]  # first try with convolve didn't work
-            ids_diff[ids_diff != 0] -= 1   # remove natural discontinuity resulting from counting upwards
+            ids_diff = ids[1:] - ids[:-1]  # first try with convolve didn't work
+            ids_diff[ids_diff != 0] -= 1  # remove natural discontinuity resulting from counting upwards
             correct = np.cumsum(ids_diff)  # cum
             gt[1:, 1] -= correct  # assume the first sample has correct id
             gt[:, 1] -= gt[0, 1] - 1  # the pedestrians diff may begin with n != 1
@@ -64,7 +65,8 @@ class MotBBSequence(Dataset):
             neg_ids_y = np.where(gt[:, 3] < 0)
             pos_ids_x = np.where(gt[:, 2] + gt[:, 4] >= info.imWidth)
             pos_ids_y = np.where(gt[:, 3] + gt[:, 5] >= info.imHeight)
-            gt[neg_ids_x, 4] += gt[neg_ids_x, 2]  # if we move the top left corner into the image we must adapt the height
+            gt[neg_ids_x, 4] += gt[
+                neg_ids_x, 2]  # if we move the top left corner into the image we must adapt the height
             gt[neg_ids_x, 2] = 0
             gt[neg_ids_y, 5] += gt[neg_ids_y, 3]  # same here (dont know if y<0 exists)
             gt[neg_ids_y, 3] = 0
@@ -84,15 +86,15 @@ class MotBBSequence(Dataset):
             traj_lengths = np.zeros(max_ped_id)
             displacements = np.zeros(max_ped_id)
             for ped_id in range(max_ped_id):
-                ids = np.where(gt[:, 1] == ped_id+1)[0]
+                ids = np.where(gt[:, 1] == ped_id + 1)[0]
                 # trajectory length
                 traj_lengths[ped_id] = ids.shape[0]
                 # displacement from begin to end
                 start = gt[ids[0], 2:4]
                 end = gt[ids[-1], 2:4]
-                #if np.sqrt(np.sum(np.square(start-end))) > 416:
+                # if np.sqrt(np.sum(np.square(start-end))) > 416:
                 #    print(start, end)
-                displacements[ped_id] = np.sqrt(np.sum(np.square(start-end)))
+                displacements[ped_id] = np.sqrt(np.sum(np.square(start - end)))
             all_traj_lengths = np.concatenate([all_traj_lengths, traj_lengths])
             all_displacements = np.concatenate([all_displacements, displacements])
 
@@ -116,9 +118,9 @@ class MotBBSequence(Dataset):
         # self.sequences contains train+valid
         # each element of sequence is [seq_length, 120, 5]
         # for debug frame_sequences contains list with source path of the corresponding image
-        self.sequences, self.frame_paths = self._intermediate_to_final(videos_train, seq_length, step)
+        self.sequences, self.frame_paths = self._intermediate_to_final(videos_train, self.seq_length, step)
         self.valid_begin = len(self.sequences)  # important for datasplit with data.subset
-        valid_seq, valid_frames = self._intermediate_to_final(videos_valid, seq_length, step, frame_offsets)
+        valid_seq, valid_frames = self._intermediate_to_final(videos_valid, self.seq_length, step, frame_offsets)
         self.sequences += valid_seq
         self.frame_paths += valid_frames
         # print stats
@@ -165,7 +167,7 @@ class MotBBSequence(Dataset):
                     local_images.append(frames)
                     start_index += step
                 else:
-                    print("finished video {} at index {}/{}".format(video, start_index+seq_length, video_len))
+                    print("finished video {} at index {}/{}".format(video, start_index + seq_length, video_len))
                     break
         return local_sequences, local_images
 
