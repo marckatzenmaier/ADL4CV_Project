@@ -56,7 +56,7 @@ class MOT_bb_singleframe(Dataset):
                 target = motu.resize_bb(target, height_scale, width_scale)
         elif self.target_transform is not None:
             target = self.target_transform(target)
-
+        sample = sample * 255
         return sample, target
 
     def __len__(self):
