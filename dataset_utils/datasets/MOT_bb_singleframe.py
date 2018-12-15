@@ -56,7 +56,7 @@ class MOT_bb_singleframe(Dataset):
                 target = motu.resize_bb(target, height_scale, width_scale)
         elif self.target_transform is not None:
             target = self.target_transform(target)
-        
+
         return sample, target
 
     def __len__(self):
@@ -87,6 +87,21 @@ class MOT_bb_singleframe_eval(Dataset):
         for path in paths:
             gt, img, info = motu.get_gt_img_inf(path)
             modified_length = int(info.seqLength * frac_train)
+
+
+            neg_ids_x = np.where(gt[:, 2] < 0)
+            neg_ids_y = np.where(gt[:, 3] < 0)
+            pos_ids_x = np.where(gt[:, 2] + gt[:, 4] >= info.imWidth)
+            pos_ids_y = np.where(gt[:, 3] + gt[:, 5] >= info.imHeight)
+            gt[neg_ids_x, 4] += gt[
+                neg_ids_x, 2]  # if we move the top left corner into the image we must adapt the height
+            gt[neg_ids_x, 2] = 0
+            gt[neg_ids_y, 5] += gt[neg_ids_y, 3]  # same here (dont know if y<0 exists)
+            gt[neg_ids_y, 3] = 0
+            gt[pos_ids_x, 4] = info.imWidth - gt[pos_ids_x, 2] - 1  # equal would also be bad
+            gt[pos_ids_y, 5] = info.imHeight - gt[pos_ids_y, 3] - 1
+
+
             gt = motu.transform_bb_to_centered(gt)
             gt = motu.filter_person(gt)
             gt = motu.filter_frames(gt, modified_length, info.seqLength)
