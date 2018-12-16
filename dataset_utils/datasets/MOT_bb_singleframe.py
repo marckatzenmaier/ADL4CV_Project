@@ -44,7 +44,11 @@ class MOT_bb_singleframe(Dataset):
             gt[neg_ids_y, 3] = 0
             gt[pos_ids_x, 4] = info.imWidth - gt[pos_ids_x, 2] - 1  # equal would also be bad
             gt[pos_ids_y, 5] = info.imHeight - gt[pos_ids_y, 3] - 1
-            
+
+            gt = gt[gt[:, 8] > 0.3, :]
+            gt = gt[gt[:, 5] > 60, :]
+            gt = gt[gt[:, 4] > 40, :]
+
             gt = motu.transform_bb_to_centered(gt)
             gt = motu.filter_person(gt)
             gt = motu.filter_frames(gt, 0, modified_length)
@@ -124,6 +128,10 @@ class MOT_bb_singleframe_eval(Dataset):
             gt[neg_ids_y, 3] = 0
             gt[pos_ids_x, 4] = info.imWidth - gt[pos_ids_x, 2] - 1  # equal would also be bad
             gt[pos_ids_y, 5] = info.imHeight - gt[pos_ids_y, 3] - 1
+            
+            gt = gt[gt[:, 8] > 0.3, :]
+            gt = gt[gt[:, 5] > 60, :]
+            gt = gt[gt[:, 4] > 40, :]
 
             gt = motu.transform_bb_to_centered(gt)
             gt = motu.filter_person(gt)
