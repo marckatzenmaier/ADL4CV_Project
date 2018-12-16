@@ -26,6 +26,25 @@ class MOT_bb_singleframe(Dataset):
         for path in paths:
             gt, img, info = motu.get_gt_img_inf(path)
             modified_length = int(info.seqLength * frac_train)
+
+            gt = gt[gt[:, 2] < info.imWidth]  # remove boxes out of the image
+            gt = gt[gt[:, 3] < info.imHeight]  # remove boxes out of the image
+
+            neg_ids_x = np.where(gt[:, 2] < 0)
+            neg_ids_y = np.where(gt[:, 3] < 0)
+
+            pos_ids_x = np.where(gt[:, 2] + gt[:, 4] >= info.imWidth)
+            pos_ids_y = np.where(gt[:, 3] + gt[:, 5] >= info.imHeight)
+            gt[neg_ids_x, 4] += gt[
+                neg_ids_x, 2]  # if we move the top left corner into the image we must adapt the height
+            gt = gt[gt[:, 4] > 0]  # make sure that width stayed positiv
+            gt[neg_ids_x, 2] = 0
+            gt[neg_ids_y, 5] += gt[neg_ids_y, 3]  # same here (dont know if y<0 exists)
+            gt = gt[gt[:, 5] > 0]  # make sure that height stayed positiv
+            gt[neg_ids_y, 3] = 0
+            gt[pos_ids_x, 4] = info.imWidth - gt[pos_ids_x, 2] - 1  # equal would also be bad
+            gt[pos_ids_y, 5] = info.imHeight - gt[pos_ids_y, 3] - 1
+            
             gt = motu.transform_bb_to_centered(gt)
             gt = motu.filter_person(gt)
             gt = motu.filter_frames(gt, 0, modified_length)
