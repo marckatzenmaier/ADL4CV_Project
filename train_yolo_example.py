@@ -113,9 +113,6 @@ def train(opt):
 
     training_set, training_loader, eval_set, eval_loader = loadTrainEvalSet(opt)
 
-    #model = Yolo(0, anchors=[(6.88, 27.44), (11.93, 58.32), (19.90, 94.92), (40.00, 195.84), (97.96, 358.62)])
-    #loadYoloBaseWeights(model, opt)
-
     # log stuff
     if os.path.isdir(opt.log_path):
         shutil.rmtree(opt.log_path)
@@ -131,73 +128,36 @@ def train(opt):
     writer.add_text('Hyperparams',
                     'lr: {}, \nbatchsize: {}, \nimg_size:{}'.format(opt.learning_rate, opt.batch_size, opt.image_size))
 
-    # loss and optimizer
-    #criterion = yloss(0, opt.model.anchors, opt.reduction)
+    # loss and optimize
     if opt.optimizer is None:
         opt.optimizer = torch.optim.Adam(opt.model.parameters(), lr=opt.learning_rate, betas=(opt.momentum, 0.999),
                                          weight_decay=opt.decay)
     #optimizer = torch.optim.SGD(opt.model.parameters(), lr=opt.learning_rate,
-    # momentum=opt.momentum, weight_decay=opt.decay)
-
-    #timing stuff for speed eval
-    load_img = []
-    run_network =[]
-    run_loss=[]
-    optim_backward = []
-    log_time = []
 
     epoch_len = len(training_loader)
     for epoch in range(opt.num_epoches):
         print('num epoch: {:4d}'.format(epoch))
         opt.model.train()
-        #temp_time = time.time()
         for img_nr, (img, gt) in enumerate(training_loader):
             if torch.cuda.is_available() and opt.useCuda:
                 img = Variable(img.cuda(), requires_grad=True)
             else:
                 img = Variable(img, requires_grad=True)
-            #load_img.append(time.time()-temp_time)
             opt.optimizer.zero_grad()
-            #temp_time = time.time()
             logits = opt.model(img)
-            #run_network.append(time.time()-temp_time)
-            #temp_time = time.time()
             loss, loss_coord, loss_conf = opt.criterion(logits, gt)
-            #run_loss.append(time.time()-temp_time)
-            #temp_time = time.time()
             writeLossToSummary(writer, 'Train', loss.item(),
                                loss_coord.item(), loss_conf.item(), epoch*epoch_len + img_nr)
-            #nr = epoch*epoch_len + img_nr
-            #writer.add_scalar('Train/Total_loss', loss.item(), nr)
-            #writer.add_scalar('Train/Coordination_loss', loss_coord.item(), nr)
-            #writer.add_scalar('Train/Confidence_loss', loss_conf.item(), nr)
-            #log_time.append(time.time()-temp_time)
-            #temp_time = time.time()
             loss.backward()
             opt.optimizer.step()
-            #optim_backward.append(time.time()-temp_time)
-            if img_nr % 1000 == 0:
+            '''if img_nr % 1000 == 0:
                 print('Iteration {0:7d} loss: {1:8.4f}, \tcoord_loss: {2:8.4f}, \tconf_loss: {3:8.4f}'
                       .format(epoch*epoch_len + img_nr,
                               loss.detach().cpu().numpy(),
                               loss_coord.detach().cpu().numpy(),
-                              loss_conf.detach().cpu().numpy()))
-
-            #if img_nr > 99:
-            #    break
-            #time.sleep(1)
-            #temp_time = time.time()
-        #print('load_time: {}'.format(np.mean(np.array(load_img))))
-        #print('network_time: {}'.format(np.mean(np.array(run_network))))
-        #print('loss_time: {}'.format(np.mean(np.array(run_loss))))
-        #print('optim_time: {}'.format(np.mean(np.array(optim_backward))))
-        #print('log_time: {}'.format(np.mean(np.array(log_time))))
-        #writer.close()
-        #exit()
+                              loss_conf.detach().cpu().numpy()))'''
 
         # eval stuff
-
-        # model, eval_loader, criterion, writer/out_losses
         opt.model.eval()
         loss_ls = []
         loss_coord_ls = []
@@ -220,15 +180,10 @@ def train(opt):
 
         writeLossToSummary(writer, 'Test', te_loss.item(),
                            te_coord_loss.item(), te_conf_loss.item(), epoch * epoch_len)
-        #writer.add_scalar('Test/Total_loss', te_loss, epoch*epoch_len)
-        #writer.add_scalar('Test/Coordination_loss', te_coord_loss, epoch*epoch_len)
-        #writer.add_scalar('Test/Confidence_loss', te_conf_loss, epoch*epoch_len)
 
         torch.save({'epoch': epoch, 'model_state_dict': opt.model.state_dict(),
                     'optimizer_state_dict': opt.optimizer.state_dict()},
                    opt.log_path+'/snapshot{:04d}.tar'.format(epoch))
-
-    #writer.export_scalars_to_json(log_path + os.sep + "all_logs.json")
     writer.close()
 
 
