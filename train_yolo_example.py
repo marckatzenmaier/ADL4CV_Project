@@ -1,11 +1,7 @@
-"""
-@author: Viet Nguyen <nhviet1009@gmail.com>
-"""
+
 import os
-import argparse
 import numpy as np
 import torch.nn as nn
-import cv2
 import torch
 from torch.utils.data import DataLoader
 from yolo.yolo_utils import *
@@ -17,38 +13,7 @@ import shutil
 import time
 from dataset_utils.datasets.MOT_bb_singleframe import MOT_bb_singleframe
 from dataset_utils.datasets.MOT_bb_singleframe import MOT_bb_singleframe_eval
-
 import dataset_utils.MOT_utils as motu
-
-def get_args():
-    parser = argparse.ArgumentParser("You Only Look Once: Unified, Real-Time Object Detection")
-    parser.add_argument("--image_size", type=int, default=448, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=10, help="The number of images per batch")
-    parser.add_argument("--momentum", type=float, default=0.9)
-    parser.add_argument("--decay", type=float, default=0.0005)
-    parser.add_argument("--dropout", type=float, default=0.5)
-    parser.add_argument("--num_epoches", type=int, default=160)
-    parser.add_argument("--test_interval", type=int, default=5, help="Number of epoches between testing phases")
-    parser.add_argument("--object_scale", type=float, default=1.0)
-    parser.add_argument("--noobject_scale", type=float, default=0.5)
-    parser.add_argument("--class_scale", type=float, default=1.0)
-    parser.add_argument("--coord_scale", type=float, default=5.0)
-    parser.add_argument("--reduction", type=int, default=32)
-    parser.add_argument("--es_min_delta", type=float, default=0.0,
-                        help="Early stopping's parameter: minimum change loss to qualify as an improvement")
-    parser.add_argument("--es_patience", type=int, default=0,
-                        help="Early stopping's parameter: number of epochs with no improvement after which training will be stopped. Set to 0 to disable this technique.")
-    parser.add_argument("--train_set", type=str, default="train")
-    parser.add_argument("--test_set", type=str, default="val")
-    parser.add_argument("--year", type=str, default="2014", help="The year of dataset (2014 or 2017)")
-    parser.add_argument("--data_path", type=str, default="data/COCO", help="the root folder of dataset")
-    parser.add_argument("--pre_trained_model_type", type=str, choices=["model", "params"], default="model")
-    parser.add_argument("--pre_trained_model_path", type=str, default="trained_models/whole_model_trained_yolo_coco")
-    parser.add_argument("--log_path", type=str, default="tensorboard/yolo_coco")
-    parser.add_argument("--saved_path", type=str, default="trained_models")
-
-    args = parser.parse_args()
-    return args
 
 
 class Opt(object):
@@ -132,7 +97,6 @@ def train(opt):
     if opt.optimizer is None:
         opt.optimizer = torch.optim.Adam(opt.model.parameters(), lr=opt.learning_rate, betas=(opt.momentum, 0.999),
                                          weight_decay=opt.decay)
-    #optimizer = torch.optim.SGD(opt.model.parameters(), lr=opt.learning_rate,
 
     epoch_len = len(training_loader)
     for epoch in range(opt.num_epoches):
@@ -150,12 +114,6 @@ def train(opt):
                                loss_coord.item(), loss_conf.item(), epoch*epoch_len + img_nr)
             loss.backward()
             opt.optimizer.step()
-            '''if img_nr % 1000 == 0:
-                print('Iteration {0:7d} loss: {1:8.4f}, \tcoord_loss: {2:8.4f}, \tconf_loss: {3:8.4f}'
-                      .format(epoch*epoch_len + img_nr,
-                              loss.detach().cpu().numpy(),
-                              loss_coord.detach().cpu().numpy(),
-                              loss_conf.detach().cpu().numpy()))'''
 
         # eval stuff
         opt.model.eval()
@@ -178,7 +136,7 @@ def train(opt):
         te_conf_loss = sum(loss_conf_ls) / eval_set.__len__()
         print('{}  {}   {}'.format(te_loss, te_coord_loss, te_conf_loss))
 
-        writeLossToSummary(writer, 'Test', te_loss.item(),
+        writeLossToSummary(writer, 'Val', te_loss.item(),
                            te_coord_loss.item(), te_conf_loss.item(), epoch * epoch_len)
 
         torch.save({'epoch': epoch, 'model_state_dict': opt.model.state_dict(),
@@ -188,12 +146,11 @@ def train(opt):
 
 
 if __name__ == "__main__":
-    #opt = get_args()
     opt = Opt()
-    opt.useCuda = True
+    opt.useCuda = False
     opt.learning_rate = 1e-5
     opt.batch_size = 1
     opt.model = Yolo(0, anchors=[(6.88, 27.44), (11.93, 58.32), (19.90, 94.92), (40.00, 195.84), (97.96, 358.62)])
     loadYoloBaseWeights(opt.model, opt)
-    opt.criterion = yloss(0, opt.model.anchors, opt.reduction)
+    opt.criterion = yloss(opt.model.anchors, opt.reduction)
     train(opt)

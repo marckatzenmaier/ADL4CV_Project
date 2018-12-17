@@ -9,7 +9,8 @@ class MOT_bb_singleframe(Dataset):
     """
     dataset which loads each frame individual
     """
-    def __init__(self, paths_file, loader=default_loader, transform=None, target_transform=None, frac_train=0.8):
+    def __init__(self, paths_file, loader=default_loader, transform=None, target_transform=None, frac_train=0.8,
+                 visibility=0.3, min_width=40, min_height=60):
         """
         inits of all file names and bounding boxes
         """
@@ -45,9 +46,9 @@ class MOT_bb_singleframe(Dataset):
             gt[pos_ids_x, 4] = info.imWidth - gt[pos_ids_x, 2] - 1  # equal would also be bad
             gt[pos_ids_y, 5] = info.imHeight - gt[pos_ids_y, 3] - 1
 
-            gt = gt[gt[:, 8] > 0.3, :]
-            gt = gt[gt[:, 5] > 60, :]
-            gt = gt[gt[:, 4] > 40, :]
+            gt = gt[gt[:, 8] > visibility, :]
+            gt = gt[gt[:, 5] > min_height, :]
+            gt = gt[gt[:, 4] > min_width, :]
 
             gt = motu.transform_bb_to_centered(gt)
             gt = motu.filter_person(gt)
@@ -93,7 +94,8 @@ class MOT_bb_singleframe_eval(Dataset):
     """
     dataset which loads each frame individual
     """
-    def __init__(self, paths_file, loader=default_loader, transform=None, target_transform=None, frac_train=0.8):
+    def __init__(self, paths_file, loader=default_loader, transform=None, target_transform=None, frac_train=0.8,
+                 visibility=0.3, min_width=40, min_height=60):
         """
         inits of all file names and bounding boxes
         """
@@ -128,10 +130,10 @@ class MOT_bb_singleframe_eval(Dataset):
             gt[neg_ids_y, 3] = 0
             gt[pos_ids_x, 4] = info.imWidth - gt[pos_ids_x, 2] - 1  # equal would also be bad
             gt[pos_ids_y, 5] = info.imHeight - gt[pos_ids_y, 3] - 1
-            
-            gt = gt[gt[:, 8] > 0.3, :]
-            gt = gt[gt[:, 5] > 60, :]
-            gt = gt[gt[:, 4] > 40, :]
+
+            gt = gt[gt[:, 8] > visibility, :]
+            gt = gt[gt[:, 5] > min_height, :]
+            gt = gt[gt[:, 4] > min_width, :]
 
             gt = motu.transform_bb_to_centered(gt)
             gt = motu.filter_person(gt)

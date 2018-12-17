@@ -4,6 +4,7 @@
 import torch
 from torch.autograd import Variable
 from torch.utils.data.dataloader import default_collate
+import numpy as np
 
 
 def custom_collate_fn(batch):
@@ -13,7 +14,7 @@ def custom_collate_fn(batch):
     return items
 
 
-def post_processing(logits, image_size, gt_classes, anchors, conf_threshold, nms_threshold):
+def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold, useCuda=True):
     num_anchors = len(anchors)
     anchors = torch.Tensor(anchors)
     if isinstance(logits, Variable):
@@ -31,26 +32,26 @@ def post_processing(logits, image_size, gt_classes, anchors, conf_threshold, nms
     lin_y = torch.linspace(0, h - 1, h).repeat(w, 1).t().contiguous().view(h * w)
     anchor_w = anchors[:, 0].contiguous().view(1, num_anchors, 1)
     anchor_h = anchors[:, 1].contiguous().view(1, num_anchors, 1)
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and useCuda:
         lin_x = lin_x.cuda()
         lin_y = lin_y.cuda()
         anchor_w = anchor_w.cuda()
         anchor_h = anchor_h.cuda()
 
+
     logits = logits.view(batch, num_anchors, -1, h * w)   # sets bounding boxes
-    logits[:, :, 0, :].sigmoid_().add_(lin_x).div_(w)
-    logits[:, :, 1, :].sigmoid_().add_(lin_y).div_(h)
-    logits[:, :, 2, :].exp_().mul_(anchor_w).div_(w)
-    logits[:, :, 3, :].exp_().mul_(anchor_h).div_(h)
-    logits[:, :, 4, :].sigmoid_()
+    logits[:, :, 0, :] = logits[:, :, 0, :].sigmoid().add(lin_x).div(w)
+    logits[:, :, 1, :] = logits[:, :, 1, :].sigmoid().add(lin_y).div(h)
+    logits[:, :, 2, :] = logits[:, :, 2, :].exp().mul(anchor_w).div(w)
+    logits[:, :, 3, :] = logits[:, :, 3, :].exp().mul(anchor_h).div(h)
+    logits[:, :, 4, :] = logits[:, :, 4, :].sigmoid()
+    #with torch.no_grad():  # class stuff
+    #    cls_scores = torch.nn.functional.softmax(logits[:, :, 5:, :], 2)
+    #cls_max, cls_max_idx = torch.max(cls_scores, 2)
+    #cls_max_idx = cls_max_idx.float()
+    #cls_max.mul_(logits[:, :, 4, :])
 
-    with torch.no_grad():  # class stuff
-        cls_scores = torch.nn.functional.softmax(logits[:, :, 5:, :], 2)
-    cls_max, cls_max_idx = torch.max(cls_scores, 2)
-    cls_max_idx = cls_max_idx.float()
-    cls_max.mul_(logits[:, :, 4, :])
-
-    score_thresh = cls_max > conf_threshold  # todo fix since we don't have classes
+    score_thresh = logits[:, :, 4, :] > conf_threshold
     score_thresh_flat = score_thresh.view(-1)
 
     if score_thresh.sum() == 0:
@@ -60,9 +61,9 @@ def post_processing(logits, image_size, gt_classes, anchors, conf_threshold, nms
     else:
         coords = logits.transpose(2, 3)[..., 0:4]
         coords = coords[score_thresh[..., None].expand_as(coords)].view(-1, 4)
-        scores = cls_max[score_thresh]  # class stuff
-        idx = cls_max_idx[score_thresh]
-        detections = torch.cat([coords, scores[:, None], idx[:, None]], dim=1)
+        scores = logits[:, :, 4, :][score_thresh] #cls_max[score_thresh]  # class stuff
+        #idx = cls_max_idx[score_thresh] class stuff
+        detections = torch.cat([coords, scores[:, None]], dim=1)
 
         max_det_per_batch = num_anchors * h * w
         slices = [slice(max_det_per_batch * i, max_det_per_batch * (i + 1)) for i in range(batch)]
@@ -75,15 +76,15 @@ def post_processing(logits, image_size, gt_classes, anchors, conf_threshold, nms
         for end in split_idx:
             predicted_boxes.append(detections[start: end])
             start = end
+    #here are all boxes with conv>= tresh in predicted_boxes
 
     selected_boxes = []
-    for boxes in predicted_boxes:
+    for boxes in predicted_boxes:  # for each batch
         if boxes.numel() == 0:
             return boxes
-
-        a = boxes[:, :2]
-        b = boxes[:, 2:4]
-        bboxes = torch.cat([a - b / 2, a + b / 2], 1)
+        a = boxes[:, :2]  # x,y
+        b = boxes[:, 2:4]  # width, eight
+        bboxes = torch.cat([a - b / 2, a + b / 2], 1)  # conversion from center to 2 punkte
         scores = boxes[:, 4]
 
         # Sort coordinates by descending score
@@ -96,17 +97,15 @@ def post_processing(logits, image_size, gt_classes, anchors, conf_threshold, nms
 
         # Compute iou
         intersections = dx * dy
-        areas = (x2 - x1) * (y2 - y1)
+        areas = (x2 - x1) * (y2 - y1)  # area of each bb
         unions = (areas + areas.t()) - intersections
         ious = intersections / unions
 
         # Filter based on iou (and class)
         conflicting = (ious > nms_threshold).triu(1)
-
         keep = conflicting.sum(0).byte()
         keep = keep.cpu()
         conflicting = conflicting.cpu()
-
         keep_len = len(keep) - 1
         for i in range(1, keep_len):
             if keep[i] > 0:
@@ -115,7 +114,7 @@ def post_processing(logits, image_size, gt_classes, anchors, conf_threshold, nms
             keep = keep.cuda()
 
         keep = (keep == 0)
-        selected_boxes.append(boxes[order][keep[:, None].expand_as(boxes)].view(-1, 6).contiguous())
+        selected_boxes.append(boxes[order][keep[:, None].expand_as(boxes)].view(-1, 5).contiguous())
 
     final_boxes = []
     for boxes in selected_boxes:
@@ -127,6 +126,6 @@ def post_processing(logits, image_size, gt_classes, anchors, conf_threshold, nms
             boxes[:, 1:4:2] *= image_size
             boxes[:, 1] -= boxes[:, 3] / 2
 
-            final_boxes.append([[box[0].item(), box[1].item(), box[2].item(), box[3].item(), box[4].item(),
-                                 gt_classes[int(box[5].item())]] for box in boxes])
+            final_boxes.append(boxes)
+            #final_boxes.append([[box[0].item(), box[1].item(), box[2].item(), box[3].item(), box[4].item()] for box in boxes])
     return final_boxes
