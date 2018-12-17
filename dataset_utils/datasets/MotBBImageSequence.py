@@ -7,12 +7,23 @@ import torch
 import os
 from scipy import misc
 from dataset_utils.datasets.MotBBSequence import MotBBSequence
+import torchvision.transforms as trans
 
 
 class MotBBImageSequence(MotBBSequence):
     """
     dataset which loads each frame individual
     """
+    def __init__(self, paths_file, seq_length=20, new_height=416, new_width=416, step=5,
+                 valid_ratio=0.2, use_only_first_video=False, loader=default_loader, transform=None):
+        super(MotBBImageSequence, self).__init__(paths_file, seq_length, new_height, new_width, step,
+                                                 valid_ratio, use_only_first_video)
+        self.loader = loader
+        if transform is not None:
+            self.transf = trans.Compose([trans.Resize((new_height, new_width)), transform, trans.ToTensor()])
+        else:
+            self.transf = trans.Compose([trans.Resize((new_height, new_width)), trans.ToTensor()])
+
 
     def __getitem__(self, index):
         """
@@ -21,12 +32,16 @@ class MotBBImageSequence(MotBBSequence):
         :return: Numpy array with shape (seq_length, 120, 5) (most of the 120 entries will be zeroes)
 
         """
-        images = np.zeros([self.seq_length, 3, self.im_size[0], self.im_size[1]], dtype=np.uint8)
+        images = torch.zeros([self.seq_length, 3, self.im_size[0], self.im_size[1]], dtype=torch.float32)
         for i in range(self.seq_length):
-            image = misc.imread(self.frame_paths[index][i])
-            image = misc.imresize(image, self.im_size)
-            print(image.dtype)
-            images[i] = image.transpose([2, 0, 1])  # convert to c w h format
+            '''#image = misc.imread(self.frame_paths[index][i])
+            #image = misc.imresize(image, self.im_size)
+            #print(image.dtype)
+            #images[i] = image.transpose([2, 0, 1])  # convert to c w h format
+            #a =self.transf(self.loader(self.frame_paths[index][i]))
+            #print(a.max())'''
+            images[i] = self.transf(self.loader(self.frame_paths[index][i]))
+
 
         # todo seq_length 20 means that the 20th sample is only used as a target
         return self.sequences[index][:-1], self.sequences[index][1:], images[:-1], images[1:]
