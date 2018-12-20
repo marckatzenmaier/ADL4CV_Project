@@ -2,6 +2,7 @@
 import torch.nn as nn
 import torch
 from lstm.LSTMModels import ConvLSTMCell_true
+from torch.nn.parameter import Parameter
 
 
 class YoloLSTM_part(nn.Module):
@@ -18,10 +19,7 @@ class YoloLSTM_part(nn.Module):
         #self.stage3_conv1 = self.lstm_cell#nn.Sequential(self.lstm_cell, nn.BatchNorm2d(1024), nn.LeakyReLU(0.1, inplace=True))
         self.stage3_conv2 = nn.Conv2d(1024, len(self.anchors) * 5, 1, 1, 0, bias=False)
 
-
-
     def forward(self, input):
-
         self.hidden, self.cell = self.lstm_cell(input, (self.hidden, self.cell))
         output = self.hidden
         output = self.stage3_conv2(output)
@@ -29,6 +27,7 @@ class YoloLSTM_part(nn.Module):
         return output
 
     def reinit_lstm(self):
-        self.hidden, self.cell = self.lstm_cell.init_hidden(self.batch_size)
-
-
+        self.hidden, self.cell = (Parameter(torch.zeros(self.batch_size, self.lstm_cell.hidden_dim,
+                                                        self.lstm_cell.height, self.lstm_cell.width)),
+                                  Parameter(torch.zeros(self.batch_size, self.lstm_cell.hidden_dim,
+                                                        self.lstm_cell.height, self.lstm_cell.width)))
