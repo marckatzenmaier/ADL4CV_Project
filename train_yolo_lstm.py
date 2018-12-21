@@ -45,7 +45,7 @@ def train(opt):
     train_data = Subset(dataset, range(0, dataset.valid_begin))
     valid_data = Subset(dataset, range(dataset.valid_begin, len(dataset)))
     train_loader = DataLoader(train_data, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers, drop_last=True)
-    valid_loader = DataLoader(valid_data, batch_size=1, shuffle=False, num_workers=opt.num_workers)
+    valid_loader = DataLoader(valid_data, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers, drop_last=True)
 
     # log stuff
     if os.path.isdir(opt.log_path):
