@@ -44,8 +44,8 @@ def train(opt):
     dataset = MotBBImageSequence('dataset_utils/Mot17_test_single.txt', use_only_first_video=False)
     train_data = Subset(dataset, range(0, dataset.valid_begin))
     valid_data = Subset(dataset, range(dataset.valid_begin, len(dataset)))
-    train_loader = DataLoader(train_data, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers)
-    valid_loader = DataLoader(valid_data, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers)
+    train_loader = DataLoader(train_data, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers, drop_last=True)
+    valid_loader = DataLoader(valid_data, batch_size=1, shuffle=False, num_workers=opt.num_workers)
 
     # log stuff
     if os.path.isdir(opt.log_path):
@@ -133,11 +133,15 @@ def train(opt):
 
 if __name__ == "__main__":
     opt = Opt()
-    opt.useCuda = False
+    opt.useCuda = True
     opt.learning_rate = 1e-5
     opt.batch_size = 1
     opt.model = YoloLSTM(opt.batch_size)
     opt.pre_trained_model_path = '/home/marc/Downloads/snapshots/fixed_anchors/snapshot0010.tar'
     load_Snapshot_to_yolo_LSTM(opt.model.encoder, opt)
+    device = torch.device("cuda")
+    opt.model.encoder.to(device)
+    opt.model.lstm_part.to(device)
+    opt.model.to(device)
     opt.criterion = YoloLoss(opt.model.anchors, filter_fkt=filter_gt)
     train(opt)
