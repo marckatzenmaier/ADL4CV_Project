@@ -20,14 +20,16 @@ class YoloLSTM_part(nn.Module):
         self.stage3_conv2 = nn.Conv2d(1024, len(self.anchors) * 5, 1, 1, 0, bias=False)
 
     def forward(self, input):
-        self.hidden, self.cell = self.lstm_cell(input, (self.hidden, self.cell))
+        h, c = self.lstm_cell(input, (self.hidden, self.cell))
+        self.hidden = Parameter(h)
+        self.cell = Parameter(c)
         output = self.hidden
         output = self.stage3_conv2(output)
-
         return output
 
     def reinit_lstm(self):
+        dev = next(self.parameters()).device  # torch.device("cuda")#self.hidden.device
         self.hidden, self.cell = (Parameter(torch.zeros(self.batch_size, self.lstm_cell.hidden_dim,
-                                                        self.lstm_cell.height, self.lstm_cell.width)),
+                                                        self.lstm_cell.height, self.lstm_cell.width).to(dev)),
                                   Parameter(torch.zeros(self.batch_size, self.lstm_cell.hidden_dim,
-                                                        self.lstm_cell.height, self.lstm_cell.width)))
+                                                        self.lstm_cell.height, self.lstm_cell.width).to(dev)))
