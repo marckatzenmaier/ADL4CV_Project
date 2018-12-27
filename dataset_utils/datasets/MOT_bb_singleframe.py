@@ -10,7 +10,7 @@ class MOT_bb_singleframe(Dataset):
     dataset which loads each frame individual
     """
     def __init__(self, paths_file, loader=default_loader, transform=None, target_transform=None, frac_train=0.8,
-                 visibility=0.3, min_width=40, min_height=60):
+                 visibility=0.3, min_width=0, min_height=0):
         """
         inits of all file names and bounding boxes
         """
@@ -95,7 +95,7 @@ class MOT_bb_singleframe_eval(Dataset):
     dataset which loads each frame individual
     """
     def __init__(self, paths_file, loader=default_loader, transform=None, target_transform=None, frac_train=0.8,
-                 visibility=0.3, min_width=40, min_height=60):
+                 visibility=0.3, min_width=0, min_height=0):
         """
         inits of all file names and bounding boxes
         """
