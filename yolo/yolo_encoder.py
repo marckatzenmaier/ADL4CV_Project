@@ -4,11 +4,10 @@ import torch
 
 
 class YoloEncoder(nn.Module):
-    def __init__(self, batch_size, anchors=[(0.215, 0.8575), (0.3728125, 1.8225), (0.621875, 2.96625),
+    def __init__(self, anchors=[(0.215, 0.8575), (0.3728125, 1.8225), (0.621875, 2.96625),
                                             (1.25, 6.12), (3.06125, 11.206875)]):
         super(YoloEncoder, self).__init__()
         self.anchors = anchors
-        self.batch_size = batch_size
 
         self.stage1_conv1 = nn.Sequential(nn.Conv2d(3, 32, 3, 1, 1, bias=False), nn.BatchNorm2d(32),
                                           nn.LeakyReLU(0.1, inplace=True), nn.MaxPool2d(2, 2))

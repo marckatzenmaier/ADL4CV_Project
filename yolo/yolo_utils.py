@@ -13,8 +13,7 @@ def custom_collate_fn(batch):
     items[1] = list(items[1])
     return items
 
-
-def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold, useCuda=True):
+def logits_to_box_params(logits, anchors):
     num_anchors = len(anchors)
     anchors = torch.Tensor(anchors)
     if isinstance(logits, Variable):
@@ -32,26 +31,30 @@ def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold, 
     lin_y = torch.linspace(0, h - 1, h).repeat(w, 1).t().contiguous().view(h * w)
     anchor_w = anchors[:, 0].contiguous().view(1, num_anchors, 1)
     anchor_h = anchors[:, 1].contiguous().view(1, num_anchors, 1)
-    if torch.cuda.is_available() and useCuda:
+    device = logits.device
+    if torch.cuda.is_available() and device.type == "cuda":
         lin_x = lin_x.cuda()
         lin_y = lin_y.cuda()
         anchor_w = anchor_w.cuda()
         anchor_h = anchor_h.cuda()
 
-
-    logits = logits.view(batch, num_anchors, -1, h * w)   # sets bounding boxes
+    logits = logits.view(batch, num_anchors, -1, h * w)  # sets bounding boxes
     logits[:, :, 0, :] = logits[:, :, 0, :].sigmoid().add(lin_x).div(w)
     logits[:, :, 1, :] = logits[:, :, 1, :].sigmoid().add(lin_y).div(h)
     logits[:, :, 2, :] = logits[:, :, 2, :].exp().mul(anchor_w).div(w)
     logits[:, :, 3, :] = logits[:, :, 3, :].exp().mul(anchor_h).div(h)
     logits[:, :, 4, :] = logits[:, :, 4, :].sigmoid()
-    #with torch.no_grad():  # class stuff
-    #    cls_scores = torch.nn.functional.softmax(logits[:, :, 5:, :], 2)
-    #cls_max, cls_max_idx = torch.max(cls_scores, 2)
-    #cls_max_idx = cls_max_idx.float()
-    #cls_max.mul_(logits[:, :, 4, :])
+    return logits
 
-    score_thresh = logits[:, :, 4, :] > conf_threshold
+def filter_box_params(box_logits, image_size, anchors, conf_threshold, nms_threshold):
+    """retruns vox as ltwh"""
+    num_anchors = len(anchors)
+    batch = box_logits.size(0)
+    h = box_logits.size(2)
+    w = box_logits.size(3)
+
+
+    score_thresh = box_logits[:, :, 4, :] > conf_threshold
     score_thresh_flat = score_thresh.view(-1)
 
     if score_thresh.sum() == 0:
@@ -59,9 +62,9 @@ def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold, 
         for i in range(batch):
             predicted_boxes.append(torch.Tensor([]))
     else:
-        coords = logits.transpose(2, 3)[..., 0:4]
+        coords = box_logits.transpose(2, 3)[..., 0:4]
         coords = coords[score_thresh[..., None].expand_as(coords)].view(-1, 4)
-        scores = logits[:, :, 4, :][score_thresh] #cls_max[score_thresh]  # class stuff
+        scores = box_logits[:, :, 4, :][score_thresh] #cls_max[score_thresh]  # class stuff
         #idx = cls_max_idx[score_thresh] class stuff
         detections = torch.cat([coords, scores[:, None]], dim=1)
 
@@ -127,5 +130,9 @@ def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold, 
             boxes[:, 1] -= boxes[:, 3] / 2
 
             final_boxes.append(boxes)
-            #final_boxes.append([[box[0].item(), box[1].item(), box[2].item(), box[3].item(), box[4].item()] for box in boxes])
     return final_boxes
+
+
+def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold):
+    return filter_box_params(logits_to_box_params(logits, anchors),
+                             image_size, anchors, conf_threshold, nms_threshold)
