@@ -1,5 +1,15 @@
 import torch
 import torch.nn as nn
+from numpy import roll
+
+
+def preprocess(image):
+    # expects torch tensor !!!
+    image = image.numpy().transpose((0, 2, 3, 1))
+    image = roll(image, 1, axis=-1).transpose((0, 3, 1, 2))  # todo dont know if this roll stays in the batch
+    image += -0.5
+
+    return torch.Tensor(image)
 
 
 def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1):
@@ -99,3 +109,44 @@ class FlowNetS(nn.Module):
 
     def bias_parameters(self):
         return [param for name, param in self.named_parameters() if 'bias' in name]
+
+
+class FlowNetSEncoder(nn.Module):
+
+    def __init__(self, batchNorm=True):
+        super(FlowNetSEncoder, self).__init__()
+
+        self.batchNorm = batchNorm
+        self.conv1   = conv(self.batchNorm,    6,   64, kernel_size=7, stride=2)
+        self.conv2   = conv(self.batchNorm,   64,  128, kernel_size=5, stride=2)
+        self.conv3   = conv(self.batchNorm,  128,  256, kernel_size=5, stride=2)
+        self.conv3_1 = conv(self.batchNorm,  256,  256)
+        self.conv4   = conv(self.batchNorm,  256,  512, stride=2)
+        self.conv4_1 = conv(self.batchNorm,  512,  512)
+        self.conv5   = conv(self.batchNorm,  512,  512, stride=2)
+        self.conv5_1 = conv(self.batchNorm,  512,  512)
+        self.conv6   = conv(self.batchNorm,  512, 1024, stride=2)
+        self.conv6_1 = conv(self.batchNorm, 1024, 1024)
+
+        self.deconv5 = deconv(1024, 512)
+
+        self.predict_flow6 = predict_flow(1024)
+
+        self.upsampled_flow6_to_5 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
+        self.leaky_relu = nn.LeakyReLU(0.1, inplace=False)
+#
+
+    def forward(self, x):
+        out_conv2 = self.conv2(self.conv1(x))
+        out_conv3 = self.conv3_1(self.conv3(out_conv2))
+        out_conv4 = self.conv4_1(self.conv4(out_conv3))
+        out_conv5 = self.conv5_1(self.conv5(out_conv4))
+        out_conv6 = self.conv6_1(self.conv6(out_conv5))
+
+        flow6       = self.predict_flow6(out_conv6)
+        flow6_up    = self.upsampled_flow6_to_5(flow6)
+        out_deconv5 = self.leaky_relu(self.deconv5(out_conv6))
+
+        concat5 = torch.cat((out_deconv5, flow6_up), 1)  # first try without tensor from earlier layer
+
+        return concat5

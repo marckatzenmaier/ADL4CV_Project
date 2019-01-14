@@ -38,8 +38,8 @@ class YoloLoss(nn.modules.loss._Loss):
 
         # Create prediction boxes
         pred_boxes = torch.FloatTensor(batch_size * self.num_anchors * height * width, 4)
-        lin_x = torch.range(0, width - 1).repeat(height, 1).view(height * width)
-        lin_y = torch.range(0, height - 1).repeat(width, 1).t().contiguous().view(height * width)
+        lin_x = torch.arange(0, width, dtype=torch.float).repeat(height, 1).view(height * width)
+        lin_y = torch.arange(0, height, dtype=torch.float).repeat(width, 1).t().contiguous().view(height * width)
         anchor_w = self.anchors[:, 0].contiguous().view(self.num_anchors, 1)
         anchor_h = self.anchors[:, 1].contiguous().view(self.num_anchors, 1)
 

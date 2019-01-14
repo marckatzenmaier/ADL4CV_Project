@@ -1,21 +1,19 @@
 
 import torch.nn as nn
 import torch
-from lstm.LSTMModels import ConvLSTMCell_true
-from torch.nn.parameter import Parameter
+from lstm.LSTMModels import ConvLSTMCell
 from torch.autograd import Variable
 
 
 class YoloLSTM_part(nn.Module):
-    def __init__(self, batch_size, anchors=[(0.215, 0.8575), (0.3728125, 1.8225), (0.621875, 2.96625),
-                                            (1.25, 6.12), (3.06125, 11.206875)]):
+    def __init__(self, input_size=(13, 13), input_dim=1024, hidden_dim=1024, batch_size=1,
+                 num_anchors=5):
         super(YoloLSTM_part, self).__init__()
-        self.anchors = anchors
 
-        self.lstm_cell = ConvLSTMCell_true(input_size=(13, 13), input_dim=1024+256, hidden_dim=1024,
+        self.lstm_cell = ConvLSTMCell(input_size=input_size, input_dim=input_dim, hidden_dim=hidden_dim,
                                                             kernel_size=(3, 3), bias=True)
         self.reinit_lstm(batch_size)
-        self.stage3_conv2 = nn.Conv2d(1024, len(self.anchors) * 5, 1, 1, 0, bias=False)
+        self.stage3_conv2 = nn.Conv2d(1024, num_anchors * 5, 1, 1, 0, bias=False)
 
     def forward(self, input):
         self.hidden, self.cell = self.lstm_cell(input, (self.hidden, self.cell))
