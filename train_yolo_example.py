@@ -61,10 +61,10 @@ def loadYoloBaseWeights(yolo_model, opt):
     load_strict = False
     if torch.cuda.is_available() and opt.useCuda:
         device = torch.device("cuda")
-        model_state_dict = torch.load(opt.pre_trained_model_path, map_location="cuda:0")
+        model_state_dict = torch.load(opt.pre_trained_yolo_path, map_location="cuda:0")
     else:
         device = torch.device('cpu')
-        model_state_dict = torch.load(opt.pre_trained_model_path, map_location='cpu')
+        model_state_dict = torch.load(opt.pre_trained_yolo_path, map_location='cpu')
     del model_state_dict["stage3_conv2.weight"]
     yolo_model.load_state_dict(model_state_dict, strict=load_strict)
     yolo_model.to(device)
