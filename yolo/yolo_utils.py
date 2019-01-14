@@ -5,6 +5,13 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data.dataloader import default_collate
 import numpy as np
+from PIL import Image
+from PIL.ImageDraw import ImageDraw
+
+from Object_Detection_Metrics.lib.BoundingBox import BoundingBox
+from Object_Detection_Metrics.lib.BoundingBoxes import BoundingBoxes
+from Object_Detection_Metrics.lib.Evaluator import *
+from Object_Detection_Metrics.lib.utils import *
 
 
 def custom_collate_fn(batch):
@@ -136,3 +143,50 @@ def filter_box_params(box_logits, image_size, anchors, conf_threshold, nms_thres
 def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold):
     return filter_box_params(logits_to_box_params(logits, anchors),
                              image_size, anchors, conf_threshold, nms_threshold)
+
+def draw_img(logits, img, img_size, anchors):
+    img = img.contiguous().cpu().numpy()
+    boxes = post_processing(logits, img_size, anchors, .25, .5)
+    img = img.transpose(1,2,0)*255
+    img = Image.fromarray(img.astype(np.uint8), 'RGB')
+    img = make_boxed_img_ccwh(img, boxes, 1, 1)
+    return img
+
+def make_boxed_img_ccwh(img, boxes, width_ratio, height_ratio, width=416, height=416):
+    if len(boxes) != 0:
+        predictions = boxes[0]
+        for pred in predictions:
+            xmin = int(max((pred[0]) / width_ratio, 0))
+            ymin = int(max((pred[1]) / height_ratio, 0))
+            xmax = int(min((pred[0] + pred[2]) / width_ratio, width))
+            ymax = int(min((pred[1] + pred[3]) / height_ratio, height))
+            imgdraw = ImageDraw(img)
+            drawrect(imgdraw, [(xmin, ymin), (xmax, ymax)], outline=(255,50,50), width=2)
+    return img
+
+def drawrect(drawcontext, xy, outline=None, width=0):
+    (x1, y1), (x2, y2) = xy
+    points = (x1, y1), (x2, y1), (x2, y2), (x1, y2), (x1, y1)
+    drawcontext.line(points, fill=outline, width=width)
+
+def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
+    evaluator = Evaluator()
+    allBoundingBoxes = BoundingBoxes()
+    gt=gt.cpu().numpy()
+    for i in range(gt.shape[0]):
+        bb = BoundingBox('0', 0, gt[i, 0], gt[i, 1], gt[i, 2], gt[i, 3], CoordinatesType.Absolute,
+                         (width, height), bbType=BBType.GroundTruth, format=BBFormat.XYWH)
+        allBoundingBoxes.addBoundingBox(bb)
+    #    #print(i)
+    box_logits = logits_to_box_params(logits, anchors)
+    coords = box_logits.transpose(2, 3).contiguous().view(-1, 5)
+    coords = coords.cpu().numpy()
+    coords[:, [0, 2]] *= width
+    coords[:, [1, 3]] *= height
+    for i in range(coords.shape[0]):
+        bb = BoundingBox('0', 0, coords[i, 0], coords[i, 1], coords[i, 2], coords[i, 3], CoordinatesType.Absolute,
+                         (width, height), BBType.Detected, coords[i, 4], format=BBFormat.XYWH)
+        allBoundingBoxes.addBoundingBox(bb)
+    metricsPerClass = evaluator.GetPascalVOCMetrics(allBoundingBoxes, IOUThreshold=IOU_threshold,
+                                                    method=MethodAveragePrecision.EveryPointInterpolation)
+    return metricsPerClass[0]['AP']

@@ -70,8 +70,8 @@ class MOT_bb_singleframe(Dataset):
         width, height = sample.size
         if self.transform is not None:
             sample = self.transform(sample)
-        if height != sample.shape[1] and width != sample.shape[2]:
-            height_scale = height/sample.shape[1]
+        if height != sample.shape[2] and width != sample.shape[1]:
+            height_scale = height/sample.shape[2]
             width_scale = width/sample.shape[1]
             if self.target_transform is not None:
                 target = trans.Compose([trans.Lambda(lambda x: motu.resize_bb(x, height_scale, width_scale)),

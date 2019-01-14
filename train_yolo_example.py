@@ -103,6 +103,7 @@ def train(opt):
         print('num epoch: {:4d}'.format(epoch))
         opt.model.train()
         for img_nr, (img, gt) in enumerate(training_loader):
+            break
             if torch.cuda.is_available() and opt.useCuda:
                 img = Variable(img.cuda(), requires_grad=True)
             else:
@@ -120,6 +121,8 @@ def train(opt):
         loss_ls = []
         loss_coord_ls = []
         loss_conf_ls = []
+        all_ap = []
+        all_ap1 = []
         for te_iter, te_batch in enumerate(eval_loader):
             te_image, te_label = te_batch
             num_sample = len(te_label)
@@ -128,6 +131,17 @@ def train(opt):
             with torch.no_grad():
                 te_logits = opt.model(te_image)
                 batch_loss, batch_loss_coord, batch_loss_conf = opt.criterion(te_logits, te_label)
+                for i in range(num_sample):
+                    ap = get_ap(te_logits[0].unsqueeze(0), gt[0], opt.image_size, opt.image_size,opt.model.anchors, .5)
+                    ap1 = get_ap(te_logits[0].unsqueeze(0), gt[0], opt.image_size, opt.image_size,opt.model.anchors, .8)
+                    all_ap.append(ap)
+                    all_ap1.append(ap1)
+                #if te_iter % 10 ==0:
+                #    img = np.array(draw_img(te_logits, te_image[0], opt.image_size, opt.model.anchors))
+                #    print(img.shape)
+                #    print(img.dtype)
+                #    print(type(img))
+                #    writer.add_image(f'Val/{epoch}', img)
             loss_ls.append(batch_loss * num_sample)
             loss_coord_ls.append(batch_loss_coord * num_sample)
             loss_conf_ls.append(batch_loss_conf * num_sample)
@@ -135,7 +149,8 @@ def train(opt):
         te_coord_loss = sum(loss_coord_ls) / eval_set.__len__()
         te_conf_loss = sum(loss_conf_ls) / eval_set.__len__()
         print('{}  {}   {}'.format(te_loss, te_coord_loss, te_conf_loss))
-
+        writer.add_scalar('Val/AP0.5', np.mean(np.array(all_ap)), epoch * epoch_len)
+        writer.add_scalar('Val/AP0.8', np.mean(np.array(all_ap1)), epoch * epoch_len)
         writeLossToSummary(writer, 'Val', te_loss.item(),
                            te_coord_loss.item(), te_conf_loss.item(), epoch * epoch_len)
 
@@ -147,10 +162,11 @@ def train(opt):
 
 if __name__ == "__main__":
     opt = Opt()
-    opt.useCuda = False
+    opt.useCuda = True
     opt.learning_rate = 1e-5
     opt.batch_size = 1
-    opt.model = Yolo(0, anchors=[(6.88, 27.44), (11.93, 58.32), (19.90, 94.92), (40.00, 195.84), (97.96, 358.62)])
+    opt.model = Yolo(0, anchors=[(0.215, 0.8575), (0.3728125, 1.8225), (0.621875, 2.96625),
+                                            (1.25, 6.12), (3.06125, 11.206875)])
     loadYoloBaseWeights(opt.model, opt)
     opt.criterion = yloss(opt.model.anchors, opt.reduction)
     train(opt)
