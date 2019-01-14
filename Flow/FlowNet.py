@@ -5,8 +5,8 @@ from numpy import roll
 
 def preprocess(image):
     # expects torch tensor !!!
-    image = image.numpy().transpose(0, 2, 3, 1)
-    image = roll(image, 1, axis=-1).transpose((0, 1, 2, 3))  # todo dont know if this roll stays in the batch
+    image = image.numpy().transpose((0, 2, 3, 1))
+    image = roll(image, 1, axis=-1).transpose((0, 3, 1, 2))  # todo dont know if this roll stays in the batch
     image += -0.5
 
     return torch.Tensor(image)
@@ -114,7 +114,7 @@ class FlowNetS(nn.Module):
 class FlowNetSEncoder(nn.Module):
 
     def __init__(self, batchNorm=True):
-        super(FlowNetS, self).__init__()
+        super(FlowNetSEncoder, self).__init__()
 
         self.batchNorm = batchNorm
         self.conv1   = conv(self.batchNorm,    6,   64, kernel_size=7, stride=2)

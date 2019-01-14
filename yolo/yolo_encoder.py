@@ -54,6 +54,8 @@ class YoloEncoder(nn.Module):
 
         self.stage2_b_conv = nn.Sequential(nn.Conv2d(512, 64, 1, 1, 0, bias=False), nn.BatchNorm2d(64),
                                            nn.LeakyReLU(0.1, inplace=True))
+        self.stage3_conv1 = nn.Sequential(nn.Conv2d(256 + 1024, 1024, 3, 1, 1, bias=False), nn.BatchNorm2d(1024),
+                                          nn.LeakyReLU(0.1, inplace=True))
 
     def forward(self, input):
         output = self.stage1_conv1(input)
@@ -88,5 +90,6 @@ class YoloEncoder(nn.Module):
         output_2 = output_2.view(batch_size, -1, int(height / 2), int(width / 2))
 
         output = torch.cat((output_1, output_2), 1)
+        output = self.stage3_conv1(output)
 
         return output

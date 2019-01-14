@@ -26,7 +26,7 @@ class Opt(object):
         self.image_size = 416
         self.log_path = './log/test'
         self.pre_trained_yolo_path = './models/yolo80_coco.pt'
-        self.pre_trainded_flownet_path = './models/flownets_EPE1.951.pth.tar'
+        self.pre_trained_flownet_path = './models/flownets_EPE1.951.pth.tar'
         self.dataset_file = 'dataset_utils/Mot17_test_single.txt'
         self.learning_rate = 1e-6
         self.useCuda = True  # for easy disabeling cuda
