@@ -8,10 +8,10 @@ import numpy as np
 from PIL import Image
 from PIL.ImageDraw import ImageDraw
 
-from Object_Detection_Metrics.lib.BoundingBox import BoundingBox
-from Object_Detection_Metrics.lib.BoundingBoxes import BoundingBoxes
-from Object_Detection_Metrics.lib.Evaluator import *
-from Object_Detection_Metrics.lib.utils import *
+from Object_Detection_Metrics.lib_s.BoundingBox import BoundingBox
+from Object_Detection_Metrics.lib_s.BoundingBoxes import BoundingBoxes
+from Object_Detection_Metrics.lib_s.Evaluator import *
+from Object_Detection_Metrics.lib_s.utils import *
 
 
 def custom_collate_fn(batch):
