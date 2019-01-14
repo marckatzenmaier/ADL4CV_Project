@@ -25,7 +25,8 @@ class Opt(object):
         self.decay = 0.0005
         self.image_size = 416
         self.log_path = './log/test'
-        self.pre_trained_model_path = './models/yolo80_coco.pt'
+        self.pre_trained_yolo_path = './models/yolo80_coco.pt'
+        self.pre_trainded_flownet_path = './models/flownets_EPE1.951.pth.tar'
         self.dataset_file = 'dataset_utils/Mot17_test_single.txt'
         self.learning_rate = 1e-6
         self.useCuda = True  # for easy disabeling cuda
@@ -35,10 +36,12 @@ class Opt(object):
         self.criterion = None
         self.optimizer = None
 
+
 def writeLossToSummary(writer, prefix, loss, loss_coord, loss_conf, index):
     writer.add_scalar(prefix + '/Total_loss', loss, index)
     writer.add_scalar(prefix + '/Coordination_loss', loss_coord, index)
     writer.add_scalar(prefix + '/Confidence_loss', loss_conf, index)
+
 
 def loadTrainEvalSet(opt):
     trans = torchvision.transforms.Compose([torchvision.transforms.Resize((opt.image_size, opt.image_size))])

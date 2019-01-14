@@ -73,7 +73,7 @@ class SequenceClassifierCNN(nn.Module):
         #self.lstm_1 = ConvLSTMCell(channels_in=64, hidden_size=(64, 16, 16), kernel=(3, 3))
         #self.lstm_2 = ConvLSTMCell(channels_in=64, hidden_size=(64, 16, 16), kernel=(3, 3))
 
-        self.lstm_1 = ConvLSTMCell_true((16, 16), 64, 128, (1, 1), bias=True)
+        self.lstm_1 = ConvLSTMCell((16, 16), 64, 128, (1, 1), bias=True)
 
         self.init_output_transform(output_size)
 
@@ -123,42 +123,6 @@ class SequenceClassifierCNN(nn.Module):
 
 class ConvLSTMCell(nn.Module):
 
-    def __init__(self, channels_in, hidden_size, kernel):
-        super(ConvLSTMCell, self).__init__()
-        padding = (kernel[0] - 1) // 2
-        self.conv_xi = nn.Conv2d(channels_in, hidden_size[0], kernel, padding=padding, bias=False)
-        self.conv_hi = nn.Conv2d(hidden_size[0], hidden_size[0], kernel, padding=padding, bias=False)
-        self.weight_ci = torch.randn(hidden_size, dtype=torch.float, requires_grad=True)
-        self.b_i = torch.zeros(channels_in, dtype=torch.float, requires_grad=True)
-
-        self.conv_xf = nn.Conv2d(channels_in, hidden_size[0], kernel, padding=padding, bias=False)
-        self.conv_hf = nn.Conv2d(hidden_size[0], hidden_size[0], kernel, padding=padding, bias=False)
-        self.weight_cf = torch.randn(hidden_size, dtype=torch.float, requires_grad=True)
-        self.b_f = torch.zeros(channels_in, dtype=torch.float, requires_grad=True)
-
-        self.conv_xc = nn.Conv2d(channels_in, hidden_size[0], kernel, padding=padding, bias=False)
-        self.conv_hc = nn.Conv2d(hidden_size[0], hidden_size[0], kernel, padding=padding, bias=False)
-        self.b_c = torch.zeros(channels_in, dtype=torch.float, requires_grad=True)
-
-        self.conv_xo = nn.Conv2d(channels_in, hidden_size[0], kernel, padding=padding, bias=False)
-        self.conv_ho = nn.Conv2d(hidden_size[0], hidden_size[0], kernel, padding=padding, bias=False)
-        self.weight_co = torch.randn(hidden_size, dtype=torch.float, requires_grad=True)
-        self.b_o = torch.zeros(channels_in, dtype=torch.float, requires_grad=True)
-
-    def forward(self, x, states):
-        h_t = states[0]
-        c_t = states[1]
-        i_t = (self.conv_xi(x) + self.conv_hi(h_t) + self.weight_ci.unsqueeze(0) * c_t + self.b_i.view(1, -1, 1, 1)).sigmoid()
-        f_t = (self.conv_xf(x) + self.conv_hf(h_t) + self.weight_cf.unsqueeze(0) * c_t + self.b_f.view(1, -1, 1, 1)).sigmoid()
-        c_t_1 = f_t * c_t + i_t * (self.conv_xc(x) + self.conv_hc(h_t) + self.b_c.view(1, -1, 1, 1)).tanh()
-        o_t_1 = (self.conv_xo(x) + self.conv_ho(h_t) + self.weight_co.unsqueeze(0) * c_t_1 + self.b_o.view(1, -1, 1, 1)).sigmoid()
-        h_t_1 = o_t_1 * c_t_1.tanh()
-
-        return h_t_1, c_t_1
-
-
-class ConvLSTMCell_true(nn.Module):
-
     def __init__(self, input_size, input_dim, hidden_dim, kernel_size, bias):
         """
         Initialize ConvLSTM cell.
@@ -177,7 +141,7 @@ class ConvLSTMCell_true(nn.Module):
             Whether or not to add the bias.
         """
 
-        super(ConvLSTMCell_true, self).__init__()
+        super(ConvLSTMCell, self).__init__()
 
         self.height, self.width = input_size
         self.input_dim = input_dim

@@ -3,10 +3,7 @@ from torch.utils.data import DataLoader, Subset
 from yolo.yolo_LSTM import YoloLSTM
 from yolo.loss import YoloLoss
 from train_yolo_example import Opt
-import torch.nn as nn
 import torch
-from yolo.yolo_encoder import YoloEncoder
-from yolo.yolo_lstm_part import YoloLSTM_part
 from tensorboardX import SummaryWriter
 import shutil
 
@@ -16,6 +13,7 @@ from train_yolo_example import writeLossToSummary
 def filter_gt(gt):
     # used to filter only existing bb for loss
     return gt[gt[:, 0] != 0.0]
+
 
 def load_Snapshot_to_yolo_LSTM(model, opt):
     load_strict = True
@@ -35,6 +33,7 @@ def load_Snapshot_to_yolo_LSTM(model, opt):
     model.load_state_dict(model_state_dict, strict=load_strict)
     model.to(device)
 
+
 def train(opt):
     # setup train and eval set
     if torch.cuda.is_available() and opt.useCuda:
@@ -44,8 +43,10 @@ def train(opt):
     dataset = MotBBImageSequence('dataset_utils/Mot17_test_single.txt', use_only_first_video=False)
     train_data = Subset(dataset, range(0, dataset.valid_begin))
     valid_data = Subset(dataset, range(dataset.valid_begin, len(dataset)))
-    train_loader = DataLoader(train_data, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers, drop_last=True)
-    valid_loader = DataLoader(valid_data, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers, drop_last=True)
+    train_loader = DataLoader(train_data, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers,
+                              drop_last=True)
+    valid_loader = DataLoader(valid_data, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers,
+                              drop_last=True)
 
     # log stuff
     if os.path.isdir(opt.log_path):
@@ -137,7 +138,7 @@ if __name__ == "__main__":
     opt.learning_rate = 1e-5
     opt.batch_size = 1
     opt.model = YoloLSTM(opt.batch_size)
-    opt.pre_trained_model_path = '/home/marc/Downloads/snapshots/fixed_anchors/snapshot0010.tar'
+    opt.pre_trained_yolo_path = '/home/marc/Downloads/snapshots/fixed_anchors/snapshot0010.tar'
     load_Snapshot_to_yolo_LSTM(opt.model.encoder, opt)
     device = torch.device("cuda")
     opt.model.encoder.to(device)
