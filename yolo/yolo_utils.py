@@ -45,7 +45,7 @@ def logits_to_box_params(logits, anchors):
         anchor_w = anchor_w.cuda()
         anchor_h = anchor_h.cuda()
 
-    logits = logits.view(batch, num_anchors, -1, h * w)  # sets bounding boxes
+    logits = logits.view(batch, num_anchors, -1, h * w).clone()  # sets bounding boxes
     logits[:, :, 0, :] = logits[:, :, 0, :].sigmoid().add(lin_x).div(w)
     logits[:, :, 1, :] = logits[:, :, 1, :].sigmoid().add(lin_y).div(h)
     logits[:, :, 2, :] = logits[:, :, 2, :].exp().mul(anchor_w).div(w)
@@ -125,16 +125,16 @@ def filter_box_params(box_logits, image_size, anchors, conf_threshold, nms_thres
 
         keep = (keep == 0)
         selected_boxes.append(boxes[order][keep[:, None].expand_as(boxes)].view(-1, 5).contiguous())
-
     final_boxes = []
     for boxes in selected_boxes:
         if boxes.dim() == 0:
             final_boxes.append([])
         else:
-            boxes[:, 0:3:2] *= image_size
-            boxes[:, 0] -= boxes[:, 2] / 2
-            boxes[:, 1:4:2] *= image_size
-            boxes[:, 1] -= boxes[:, 3] / 2
+            boxes *=1
+            #boxes[:, 0:3:2] *= image_size
+            #boxes[:, 0] -= boxes[:, 2] / 2
+            #boxes[:, 1:4:2] *= image_size
+            #boxes[:, 1] -= boxes[:, 3] / 2
 
             final_boxes.append(boxes)
     return final_boxes
@@ -144,9 +144,9 @@ def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold):
     return filter_box_params(logits_to_box_params(logits, anchors),
                              image_size, anchors, conf_threshold, nms_threshold)
 
-def draw_img(logits, img, img_size, anchors):
+def draw_img(logits, img, img_size, anchors, conf_threshold=.25, nms_threshold=.5):
     img = img.contiguous().cpu().numpy()
-    boxes = post_processing(logits, img_size, anchors, .25, .5)
+    boxes = post_processing(logits, img_size, anchors, conf_threshold, nms_threshold)
     img = img.transpose(1,2,0)*255
     img = Image.fromarray(img.astype(np.uint8), 'RGB')
     img = make_boxed_img_ccwh(img, boxes, 1, 1)
@@ -177,9 +177,8 @@ def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
         bb = BoundingBox('0', 0, gt[i, 0], gt[i, 1], gt[i, 2], gt[i, 3], CoordinatesType.Absolute,
                          (width, height), bbType=BBType.GroundTruth, format=BBFormat.XYWH)
         allBoundingBoxes.addBoundingBox(bb)
-    #    #print(i)
-    box_logits = logits_to_box_params(logits, anchors)
-    coords = box_logits.transpose(2, 3).contiguous().view(-1, 5)
+    #box_logits = logits_to_box_params(logits, anchors)
+    coords = filter_box_params(logits_to_box_params(logits, anchors), width, anchors, 0., 0.5)[0]
     coords = coords.cpu().numpy()
     coords[:, [0, 2]] *= width
     coords[:, [1, 3]] *= height
