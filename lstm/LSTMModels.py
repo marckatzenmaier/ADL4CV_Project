@@ -177,3 +177,32 @@ class ConvLSTMCell(nn.Module):
     def init_hidden(self, batch_size):
         return (Variable(torch.zeros(batch_size, self.hidden_dim, self.height, self.width)),
                 Variable(torch.zeros(batch_size, self.hidden_dim, self.height, self.width)))
+
+
+class ConvLSTM(nn.Module):
+    def __init__(self, input_size, input_dim, hidden_dim, batch_size_init):
+        super(ConvLSTM, self).__init__()
+        # layer parameter
+
+        self.input = nn.Conv2d(input_dim, 512, kernel_size=3, padding=1)
+
+        self.lstm = ConvLSTMCell(input_size, 512, hidden_dim, kernel_size=(3, 3), bias=True)
+
+        self.output = nn.Conv2d(hidden_dim, input_dim, kernel_size=3, padding=1)
+
+        self.hidden, self.cell = self.lstm.init_hidden(batch_size_init)
+
+    def forward(self, input):
+
+        x = self.input(input)  # todo bigger embedding
+
+        self.hidden, self.cell = self.lstm(x.squeeze(dim=2), (self.hidden, self.cell))
+
+        return self.output(self.hidden)
+
+    def reset_hidden(self, batch_size):
+        self.hidden, self.cell = self.lstm.init_hidden(batch_size)
+
+    def set_hidden(self, hidden, cell):
+        self.hidden = hidden
+        self.cell = cell

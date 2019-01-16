@@ -19,7 +19,7 @@ import scipy.misc as misc
 # todo train loop
 # todo load data
 
-def draw_pred_sequence(box_list, image_paths, seq_length):
+def draw_pred_sequence(box_list, image_paths, seq_length, obs_length):
 
     frame_paths = image_paths
     for i in range(seq_length):
@@ -179,7 +179,7 @@ if __name__ == "__main__":
             box_list = prediction_to_box_list(pred_sequence, False)
             dis_error.append(displacement_error(box_list, center_distance))
             if epoch % 80 == 0 and epoch != 0:
-                draw_pred_sequence(box_list, list(map(lambda x: x[0], target_frames)), pred_length)
+                draw_pred_sequence(box_list, list(map(lambda x: x[0], target_frames)), pred_length, obs_length)
 
             # logging and stats
         loss = np.mean(loss)
