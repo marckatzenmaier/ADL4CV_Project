@@ -98,10 +98,10 @@ class NaiveLoss(nn.modules.loss._Loss):
         # todo idea all valid boxes are contained in target -> if a box vanishes it is not in target !! use target for
         # todo valid boxes
         mask = target[:, :, :, :, 0] != 0
-        mask = torch.unsqueeze(torch.Tensor(mask.astype(np.int)), 4)
+        mask = torch.unsqueeze(mask.float(), 4)
 
-        input = torch.Tensor(input[:, :, :, :, 1:])
-        target = torch.Tensor(target[:, :, :, :, 1:])
+        input = input[:, :, :, :, 1:]
+        target = target[:, :, :, :, 1:]
         #print(torch.masked_select(pred, (pred.detach() * mask.detach() > 0).byte()))
         return torch.sum(mask * torch.pow((target - input - pred), 2)) / torch.nonzero(mask).size(0)
 

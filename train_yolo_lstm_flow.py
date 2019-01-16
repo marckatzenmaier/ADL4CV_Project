@@ -66,28 +66,22 @@ def load_Snapshot_to_yolo_LSTM(model, opt):
         del dict["upsampled_flow3_to_2.weight"]
         return dict
 
-    if torch.cuda.is_available() and opt.useCuda:
-        device = torch.device("cuda")
-        model_state_dict_yolo = torch.load(opt.pre_trained_yolo_path, map_location="cuda:0")['model_state_dict']
-        model_state_dict_flow = torch.load(opt.pre_trained_flownet_path, map_location="cuda:0")['state_dict']
-    else:
-        device = torch.device('cpu')
-        model_state_dict_yolo = torch.load(opt.pre_trained_yolo_path, map_location='cpu')['model_state_dict']
-        model_state_dict_flow = torch.load(opt.pre_trained_flownet_path, map_location='cpu')['state_dict']
+
+
+    model_state_dict_yolo = torch.load(opt.pre_trained_yolo_path, map_location=opt.device())['model_state_dict']
+    model_state_dict_flow = torch.load(opt.pre_trained_flownet_path, map_location=opt.device())['state_dict']
 
     del model_state_dict_yolo["stage3_conv2.weight"]
     model_state_dict_flow = remove_flownet_weights(model_state_dict_flow)
     model.encoder.load_state_dict(model_state_dict_yolo, strict=True)
     model.flownet.load_state_dict(model_state_dict_flow, strict=True)
-    model.to(device)
+    model.to(opt.device())
 
 
 def train(opt):
     # setup train and eval set
-    if torch.cuda.is_available() and opt.useCuda:
-        torch.cuda.manual_seed(123)
-    else:
-        torch.manual_seed(123)
+    torch.cuda.manual_seed(123)
+    torch.manual_seed(123)
 
     dataset = MotBBImageSequence('dataset_utils/Mot17_test_single.txt', use_only_first_video=False)
     train_data = Subset(dataset, range(0, dataset.valid_begin))
@@ -102,6 +96,7 @@ def train(opt):
     writer = SummaryWriter(opt.log_path)
 
     decoder_model = ConvLSTM((opt.encoding_size, opt.encoding_size), 5 * 4, 1024, batch_size_init=1)
+    decoder_model.to(opt.device())
     # todo two optimizers
     opt.optimizer = torch.optim.Adam(opt.model.parameters(), lr=opt.learning_rate, betas=(opt.momentum, 0.999),
                                      weight_decay=opt.decay)
@@ -132,16 +127,10 @@ def train(opt):
             pred_sequence = []
 
             for i in range(obs_length):  # todo geht es auf mit den sequenzen?
-                if torch.cuda.is_available() and opt.useCuda:
-                    single_gt = b[:, i].cuda()
-                    single_img2 = img2[:, i].cuda()
-                    single_img2_normed = preprocess(img2[:, i]).cuda()
-                    single_img1_normed = preprocess(img1).cuda()
-                else:
-                    single_gt = b[:, i]
-                    single_img2 = img2[:, i]
-                    single_img2_normed = preprocess(img2[:, i])
-                    single_img1_normed = preprocess(img1[:, i])
+                single_gt = b[:, i].to(opt.device())
+                single_img2 = img2[:, i].to(opt.device())
+                single_img2_normed = preprocess(img2[:, i]).to(opt.device())
+                single_img1_normed = preprocess(img1[:, i]).to(opt.device())
 
                 double_image = torch.cat((single_img1_normed, single_img2_normed), dim=1)
                 logits = opt.model((single_img2, double_image))
@@ -160,12 +149,13 @@ def train(opt):
                                .permute(0, 3, 4, 1, 2)
             # be carefull the position of the conf/id in the targets is 0 not 4
             # so we change it at this point to be consistent with the labels
-            prev_out = torch.Tensor(np.roll(prev_out.numpy(), 1, axis=-1))
-            mask = (prev_out[:, :, :, :, 0] > opt.conf_threshold).float().unsqueeze(-1).numpy()
+            prev_out = torch.Tensor(np.roll(prev_out.cpu().numpy(), 1, axis=-1)).to(opt.device())
+            mask = (prev_out[:, :, :, :, 0] > opt.conf_threshold).float().unsqueeze(-1)
             pred_loss = 0
             decoder_model.set_hidden(opt.model.lstm_part.hidden, opt.model.lstm_part.cell)
-            for i in range(pred_length):  # todo cuda
+            for i in range(pred_length):
                 _, yolo_target = prediction_loss.to_yolo(b[:, obs_length].numpy(), b[:, obs_length + i].numpy())
+                yolo_target = torch.Tensor(yolo_target).to(opt.device())
                 # target boxes are in [0, grid_h] -> normalize to 1
                 # at this point i assume that the image is a square !!!
                 yolo_target[:, :, :, :, 1:] = yolo_target[:, :, :, :, 1:] / opt.encoding_size
@@ -176,7 +166,9 @@ def train(opt):
                 pred = pred.view(opt.batch_size, len(opt.model.anchors), -1, opt.encoding_size, opt.encoding_size)\
                                .permute(0, 3, 4, 1, 2)
                 pred_loss += prediction_loss.forward(pred, prev_out, mask*yolo_target)
-                pred_sequence.append((prev_out.detach().numpy(), pred.detach().numpy(), mask*yolo_target))
+                pred_sequence.append((prev_out.detach().cpu().numpy(),
+                                      pred.detach().cpu().numpy(),
+                                      (mask*yolo_target).detach().cpu().numpy()))
                 prev_out[:, :, :, :, 1:] += pred
 
             # todo google collab
@@ -239,15 +231,17 @@ def train(opt):
             prev_out = logits_to_box_params(logits.detach(), opt.model.anchors)
             prev_out = prev_out.view(opt.batch_size, len(opt.model.anchors), -1, opt.encoding_size, opt.encoding_size)\
                                .permute(0, 3, 4, 1, 2)
-            prev_out = torch.Tensor(np.roll(prev_out.numpy(), 1, axis=-1))
+            prev_out = torch.Tensor(np.roll(prev_out.cpu().numpy(), 1, axis=-1)).to(opt.device())
 
-            mask = (prev_out[:, :, :, :, 0] > opt.conf_threshold).float().unsqueeze(-1).numpy()
+            mask = (prev_out[:, :, :, :, 0] > opt.conf_threshold).float().unsqueeze(-1)
             decoder_model.set_hidden(opt.model.lstm_part.hidden, opt.model.lstm_part.cell)
 
             pred_sequence = []
             for i in range(pred_length):  # todo cuda
                 _, yolo_target = prediction_loss.to_yolo(b[:, obs_length].numpy(), b[:, obs_length + i].numpy())
+                yolo_target = torch.Tensor(yolo_target).to(opt.device())
                 yolo_target[:, :, :, :, 1:] = yolo_target[:, :, :, :, 1:] / opt.encoding_size
+
                 input = prev_out[:, :, :, :, 1:].contiguous()\
                                                 .view(opt.batch_size, len(opt.model.anchors)*4,
                                                       opt.encoding_size, opt.encoding_size)
@@ -255,7 +249,9 @@ def train(opt):
                 pred = pred.view(opt.batch_size, len(opt.model.anchors), -1, opt.encoding_size, opt.encoding_size)\
                                .permute(0, 3, 4, 1, 2)
                 seq_loss_pred += prediction_loss.forward(pred, prev_out, mask*yolo_target)
-                pred_sequence.append((prev_out.detach().numpy(), pred.detach().numpy(), mask*yolo_target))
+                pred_sequence.append((prev_out.detach().cpu().numpy(),
+                                      pred.detach().cpu().numpy(),
+                                      (mask*yolo_target).detach().cpu().numpy()))
                 prev_out[:, :, :, :, 1:] += pred
 
             loss_eval += seq_loss_pred / pred_length
@@ -291,11 +287,8 @@ if __name__ == "__main__":
     opt.pre_trained_yolo_path = 'models/snapshot0020.tar'
 
     load_Snapshot_to_yolo_LSTM(opt.model, opt)
-    device = torch.device("cuda")
-    if opt.useCuda and torch.cuda.is_available():
-        opt.model.encoder.to(device)
-        opt.model.lstm_part.to(device)
-        opt.model
-        opt.model.to(device)
+    opt.model.encoder.to(opt.device())
+    opt.model.lstm_part.to(opt.device())
+    opt.model.to(opt.device())
     opt.criterion = YoloLoss(opt.model.anchors, filter_fkt=filter_gt)
     train(opt)

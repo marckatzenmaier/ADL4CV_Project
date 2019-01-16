@@ -38,6 +38,9 @@ class Opt(object):
         self.optimizer = None
         self.conf_threshold = 0.25
 
+    def device(self):
+        return torch.device('cuda') if self.useCuda else torch.device('cpu')
+
 
 def writeLossToSummary(writer, prefix, loss, loss_coord, loss_conf, index):
     writer.add_scalar(prefix + '/Total_loss', loss, index)
