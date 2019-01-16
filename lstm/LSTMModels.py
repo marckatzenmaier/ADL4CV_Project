@@ -175,8 +175,9 @@ class ConvLSTMCell(nn.Module):
         return h_next, c_next
 
     def init_hidden(self, batch_size):
-        return (Variable(torch.zeros(batch_size, self.hidden_dim, self.height, self.width)),
-                Variable(torch.zeros(batch_size, self.hidden_dim, self.height, self.width)))
+        dev = next(self.parameters()).device
+        return (Variable(torch.zeros(batch_size, self.hidden_dim, self.height, self.width).to(dev)),
+                Variable(torch.zeros(batch_size, self.hidden_dim, self.height, self.width).to(dev)))
 
 
 class ConvLSTM(nn.Module):
