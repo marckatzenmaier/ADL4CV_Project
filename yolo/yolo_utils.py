@@ -189,3 +189,7 @@ def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
     metricsPerClass = evaluator.GetPascalVOCMetrics(allBoundingBoxes, IOUThreshold=IOU_threshold,
                                                     method=MethodAveragePrecision.EveryPointInterpolation)
     return metricsPerClass[0]['AP']
+
+def filter_non_zero_gt(gt):
+    # used to filter only existing bb for loss
+    return gt[gt[:, 0] != 0.0]
