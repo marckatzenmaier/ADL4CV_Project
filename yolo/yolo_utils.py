@@ -195,3 +195,7 @@ def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
 def filter_non_zero_gt(gt):
     # used to filter only existing bb for loss
     return gt[gt[:, 0] != 0.0]
+
+def filter_non_zero_gt_without_id(gt):
+    # used to filter only existing bb for loss
+    return gt[gt[:, 3] != 0.0]
