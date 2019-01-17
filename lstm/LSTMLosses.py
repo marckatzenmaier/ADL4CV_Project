@@ -98,17 +98,19 @@ class NaiveLoss(nn.modules.loss._Loss):
         # todo idea all valid boxes are contained in target -> if a box vanishes it is not in target !! use target for
         # todo valid boxes
         mask = target[:, :, :, :, 0] != 0
-        mask = torch.unsqueeze(torch.Tensor(mask.astype(np.int)), 4)
+        mask = torch.unsqueeze(mask.float(), 4)
 
-        input = torch.Tensor(input[:, :, :, :, 1:])
-        target = torch.Tensor(target[:, :, :, :, 1:])
-       #print(torch.masked_select(pred, (pred.detach() * mask.detach() > 0).byte()))
+        input = input[:, :, :, :, 1:]
+        target = target[:, :, :, :, 1:]
+        #print(torch.masked_select(pred, (pred.detach() * mask.detach() > 0).byte()))
         return torch.sum(mask * torch.pow((target - input - pred), 2)) / torch.nonzero(mask).size(0)
 
-    def to_yolo(self, input, target):
+    def to_yolo(self, input, target, thresh=0.0):
         """
         :param input: array with shape (batchsize, 120, 5)
         :param target: same shape as input
+        :param thresh: threshold which determines which boxes are valid (0 if we use labels and 0.5 if we use predicted
+                        boxes from yolo
         return: shape (batchsize, grid_h, grid_w, anchors, (id, x, y, w, h)) 
                 x, y, w, h normed to -> x,y,w,h \in [0, grid_(w,h)]
         """
@@ -122,7 +124,7 @@ class NaiveLoss(nn.modules.loss._Loss):
         normed_input[:, :, 0] = input[:, :, 0]
 
         cell_coord = np.floor(normed_input[:, :, [1, 2]]).astype(np.int)  # shape: 2 120 2
-        valid_boxes = np.where(np.sum(input, axis=2) > 0)  # shape 2 120
+        valid_boxes = np.where(np.sum(input, axis=2) > thresh)  # shape 2 120
         batch_idx = valid_boxes[0]
         box_idx = valid_boxes[1]
         # for the moment calc the anchor box with euclidean metric

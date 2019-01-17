@@ -1,7 +1,6 @@
 import torch.nn as nn
-import torch
 from yolo.yolo_encoder import YoloEncoder
-from Flow.FlowNet import FlowNetSEncoder
+from flow import FlowNetSEncoder
 from yolo.yolo_lstm_part import YoloLSTM_part
 import torchvision.transforms as transforms
 from yolo.yolo_utils import *

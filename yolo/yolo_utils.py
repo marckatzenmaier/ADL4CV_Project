@@ -20,6 +20,7 @@ def custom_collate_fn(batch):
     items[1] = list(items[1])
     return items
 
+
 def logits_to_box_params(logits, anchors):
     num_anchors = len(anchors)
     anchors = torch.Tensor(anchors)
@@ -52,6 +53,7 @@ def logits_to_box_params(logits, anchors):
     logits[:, :, 3, :] = logits[:, :, 3, :].exp().mul(anchor_h).div(h)
     logits[:, :, 4, :] = logits[:, :, 4, :].sigmoid()
     return logits
+
 
 def filter_box_params(box_logits, image_size, anchors, conf_threshold, nms_threshold):
     """retruns vox as ltwh"""

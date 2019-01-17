@@ -24,6 +24,7 @@ class Opt(object):
         self.momentum = 0.9
         self.decay = 0.0005
         self.image_size = 416
+        self.encoding_size = self.image_size // self.reduction
         self.log_path = './log/test'
         self.pre_trained_yolo_path = './models/yolo80_coco.pt'
         self.pre_trained_flownet_path = './models/flownets_EPE1.951.pth.tar'
@@ -35,6 +36,10 @@ class Opt(object):
         self.model = None
         self.criterion = None
         self.optimizer = None
+        self.conf_threshold = 0.25
+
+    def device(self):
+        return torch.device('cuda') if self.useCuda else torch.device('cpu')
 
 
 def writeLossToSummary(writer, prefix, loss, loss_coord, loss_conf, index):

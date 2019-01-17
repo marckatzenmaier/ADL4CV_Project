@@ -1,7 +1,7 @@
 
 import torch.nn as nn
 import torch
-from lstm.LSTMModels import ConvLSTMCell
+from lstm import ConvLSTMCell
 from torch.autograd import Variable
 
 
