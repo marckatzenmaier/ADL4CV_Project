@@ -34,6 +34,7 @@ class MotBBImageSingle(MotBBSequence):
 
         self.augment = augment
         self.transf = Compose([Crop(), VerticalFlip(), HSVAdjust(), Resize(new_width)])
+        self.transf_eval = Resize(new_width)
         self.is_training = True
 
     def __getitem__(self, index):
@@ -59,6 +60,9 @@ class MotBBImageSingle(MotBBSequence):
             boxes[:, [1, 3]] /= float(self.im_size[0])  # boxes ccwh normalised
             if self.augment and self.is_training:
                 image, boxes = self.transf((image, boxes))
+            else:
+                image, boxes = self.transf_eval((image, boxes))
+
             boxes[:, [0, 2]] *= float(self.im_size[1])
             boxes[:, [1, 3]] *= float(self.im_size[0])
 
