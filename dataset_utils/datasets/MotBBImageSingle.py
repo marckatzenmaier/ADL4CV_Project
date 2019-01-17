@@ -57,7 +57,7 @@ class MotBBImageSingle(MotBBSequence):
             boxes = filter_non_zero_gt(self.sequences[index][0].copy())[:, 1:5] # boxes in ccwh
             boxes[:, [0, 2]] /= float(self.im_size[1])
             boxes[:, [1, 3]] /= float(self.im_size[0])  # boxes ccwh normalised
-            if self.augment:
+            if self.augment and self.is_training:
                 image, boxes = self.transf((image, boxes))
             boxes[:, [0, 2]] *= float(self.im_size[1])
             boxes[:, [1, 3]] *= float(self.im_size[0])
@@ -65,7 +65,7 @@ class MotBBImageSingle(MotBBSequence):
             lable_out = np.zeros((120, 4))
             lable_out[0:boxes.shape[0], :] = boxes
             lable_out = torch.from_numpy(lable_out)#.unsqueeze(0)
-            image = torch.from_numpy(image.astype(np.float32))#.unsqueeze(0)
+            image = torch.from_numpy(np.transpose(image.astype(np.float32), (2, 0, 1)))#.unsqueeze(0)
             #
             '''#img = image.copy()  # for testing the augmentation functions
             #cv2.imshow('0', cv2.cvtColor(draw_boxes_opencv(img, boxes), cv2.COLOR_RGB2BGR))
