@@ -132,9 +132,11 @@ class NaiveLoss(nn.modules.loss._Loss):
         # anchors shape (num_anchors, 2)
         if use_iou:
             input_wh = normed_input.copy()
-            input_wh[:, 1:2] = 0
-            iou_gt_anchors = NaiveLoss.bbox_ious(input_wh[:, 1:], self.anchors)
-            anchor_idx = np.argmax(iou_gt_anchors, axis=1)
+            input_wh[:, :, 1:3] = 0
+            anchors_np = np.zeros([len(self.anchors), 4])
+            anchors_np[:, 2:] = self.anchors
+            iou_gt_anchors = NaiveLoss.bbox_ious(input_wh[:, :, 1:], anchors_np)
+            anchor_idx = np.argmax(iou_gt_anchors, axis=2)
         else:
             anchor_idx = np.argmin(  # shape: 2 120
                          np.sum(np.abs(np.expand_dims(normed_input[:, :, [3, 4]], axis=2) - self.anchors), axis=3), axis=2)
@@ -189,17 +191,20 @@ class NaiveLoss(nn.modules.loss._Loss):
 
     @staticmethod
     def bbox_ious(boxes1, boxes2):
-        b1x1, b1y1 = np.split((boxes1[:, :2] - (boxes1[:, 2:4] / 2)), 1, 1)
-        b1x2, b1y2 = np.split((boxes1[:, :2] + (boxes1[:, 2:4] / 2)), 1, 1)
-        b2x1, b2y1 = np.split((boxes2[:, :2] - (boxes2[:, 2:4] / 2)), 1, 1)
-        b2x2, b2y2 = np.split((boxes2[:, :2] + (boxes2[:, 2:4] / 2)), 1, 1)
+        boxes1 = torch.Tensor(boxes1)
+        boxes2 = torch.Tensor(boxes2)
 
-        dx = np.clip(b1x2.min(b2x2.T) - b1x1.max(b2x1.T), a_min=0, a_max=None)
-        dy = np.clip(b1y2.min(b2y2.T) - b1y1.max(b2y1.T), a_min=0, a_max=None)
+        b1x1, b1y1 = (boxes1[:,:, :2] - (boxes1[:,:, 2:4] / 2)).split(1, 2)
+        b1x2, b1y2 = (boxes1[:,:, :2] + (boxes1[:,:, 2:4] / 2)).split(1, 2)
+        b2x1, b2y1 = (boxes2[:, :2] - (boxes2[:, 2:4] / 2)).split(1, 1)
+        b2x2, b2y2 = (boxes2[:, :2] + (boxes2[:, 2:4] / 2)).split(1, 1)
+
+        dx = (b1x2.min(b2x2.t()) - b1x1.max(b2x1.t())).clamp(min=0)
+        dy = (b1y2.min(b2y2.t()) - b1y1.max(b2y1.t())).clamp(min=0)
         intersections = dx * dy
 
         areas1 = (b1x2 - b1x1) * (b1y2 - b1y1)
         areas2 = (b2x2 - b2x1) * (b2y2 - b2y1)
-        unions = (areas1 + areas2.T) - intersections
+        unions = (areas1 + areas2.t()) - intersections
 
-        return intersections / unions
+        return intersections.numpy() / unions.numpy()
