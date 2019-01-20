@@ -105,12 +105,13 @@ class NaiveLoss(nn.modules.loss._Loss):
         #print(torch.masked_select(pred, (pred.detach() * mask.detach() > 0).byte()))
         return torch.sum(mask * torch.pow((target - input - pred), 2)) / torch.nonzero(mask).size(0)
 
-    def to_yolo(self, input, target, thresh=0.0):
+    def to_yolo(self, input, target, thresh=0.0, use_iou=False):
         """
         :param input: array with shape (batchsize, 120, 5)
         :param target: same shape as input
         :param thresh: threshold which determines which boxes are valid (0 if we use labels and 0.5 if we use predicted
                         boxes from yolo
+        :param use_iou: Use iou for anchor box matching instead of L2 distance on the parameters
         return: shape (batchsize, grid_h, grid_w, anchors, (id, x, y, w, h)) 
                 x, y, w, h normed to -> x,y,w,h \in [0, grid_(w,h)]
         """
@@ -129,8 +130,14 @@ class NaiveLoss(nn.modules.loss._Loss):
         box_idx = valid_boxes[1]
         # for the moment calc the anchor box with euclidean metric
         # anchors shape (num_anchors, 2)
-        anchor_idx = np.argmin(  # shape: 2 120
-                     np.sum(np.abs(np.expand_dims(normed_input[:, :, [3, 4]], axis=2) - self.anchors), axis=3), axis=2)
+        if use_iou:
+            input_wh = normed_input.clone()
+            input_wh[:, 1:2] = 0
+            iou_gt_anchors = NaiveLoss.bbox_ious(input_wh[:, 1:], self.anchors)
+            anchor_idx = np.argmax(iou_gt_anchors, axis=1)
+        else:
+            anchor_idx = np.argmin(  # shape: 2 120
+                         np.sum(np.abs(np.expand_dims(normed_input[:, :, [3, 4]], axis=2) - self.anchors), axis=3), axis=2)
         grid_y_idx = cell_coord[batch_idx, box_idx, 1]
         grid_x_idx = cell_coord[batch_idx, box_idx, 0]
         grid_in[batch_idx, grid_y_idx, grid_x_idx, anchor_idx[valid_boxes]] = normed_input[valid_boxes]
@@ -179,3 +186,20 @@ class NaiveLoss(nn.modules.loss._Loss):
                 anchors[i, 0] = box[0]
                 anchors[i, 1] = box[1]
             return anchors * self.grid_shape / self.image_shape
+
+    @staticmethod
+    def bbox_ious(boxes1, boxes2):
+        b1x1, b1y1 = np.split((boxes1[:, :2] - (boxes1[:, 2:4] / 2)), 1, 1)
+        b1x2, b1y2 = np.split((boxes1[:, :2] + (boxes1[:, 2:4] / 2)), 1, 1)
+        b2x1, b2y1 = np.split((boxes2[:, :2] - (boxes2[:, 2:4] / 2)), 1, 1)
+        b2x2, b2y2 = np.split((boxes2[:, :2] + (boxes2[:, 2:4] / 2)), 1, 1)
+
+        dx = np.clip(b1x2.min(b2x2.T) - b1x1.max(b2x1.T), a_min=0, a_max=None)
+        dy = np.clip(b1y2.min(b2y2.T) - b1y1.max(b2y1.T), a_min=0, a_max=None)
+        intersections = dx * dy
+
+        areas1 = (b1x2 - b1x1) * (b1y2 - b1y1)
+        areas2 = (b2x2 - b2x1) * (b2y2 - b2y1)
+        unions = (areas1 + areas2.T) - intersections
+
+        return intersections / unions
