@@ -131,7 +131,7 @@ class NaiveLoss(nn.modules.loss._Loss):
         # for the moment calc the anchor box with euclidean metric
         # anchors shape (num_anchors, 2)
         if use_iou:
-            input_wh = normed_input.clone()
+            input_wh = normed_input.copy()
             input_wh[:, 1:2] = 0
             iou_gt_anchors = NaiveLoss.bbox_ious(input_wh[:, 1:], self.anchors)
             anchor_idx = np.argmax(iou_gt_anchors, axis=1)
