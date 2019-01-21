@@ -51,8 +51,8 @@ def displacement_error(pred_box_list, metric):
                     print(np.unique(output[batch_id, :, 0]))
                     print(np.unique(input[batch_id, :, 0]))
                     print(np.unique(target[batch_id, :, 0]))
-                target_box = output[batch_id, target_box[0][0], 1:] * 416 / 16.0
-                error.append(metric(target_box, target[batch_id, box, 1:] * 416 / 16.0))
+                target_box = output[batch_id, target_box[0][0], 1:] * 416 + input[batch_id, target_box[0][0], 1:]
+                error.append(metric(target_box, target[batch_id, box, 1:] * 416))
     return np.mean(error)
 
 
