@@ -118,9 +118,11 @@ class MotBBSequence(Dataset):
         # self.sequences contains train+valid
         # each element of sequence is [seq_length, 120, 5]
         # for debug frame_sequences contains list with source path of the corresponding image
-        self.sequences, self.frame_paths = self._intermediate_to_final(videos_train, self.seq_length, step)
+        self.sequences, self.frame_paths = self._intermediate_to_final(videos_train, self.seq_length, step,
+                                                                       remaining_peds_idx=self.seq_length//2)
         self.valid_begin = len(self.sequences)  # important for datasplit with data.subset
-        valid_seq, valid_frames = self._intermediate_to_final(videos_valid, self.seq_length, step, frame_offsets)
+        valid_seq, valid_frames = self._intermediate_to_final(videos_valid, self.seq_length, step, frame_offsets,
+                                                              remaining_peds_idx=self.seq_length//2)
         self.sequences += valid_seq
         self.frame_paths += valid_frames
         # print stats
@@ -136,7 +138,7 @@ class MotBBSequence(Dataset):
         print("Min displacement: {}".format(np.min(all_displacements)))
 
     @staticmethod
-    def _intermediate_to_final(videos, seq_length, step, frame_offsets=None):
+    def _intermediate_to_final(videos, seq_length, step, frame_offsets=None, remaining_peds_idx=0):
         # first idea : assume each frame has at maximum 120 (calc it in stats)
         local_sequences = []
         local_images = []
@@ -159,7 +161,8 @@ class MotBBSequence(Dataset):
                             frames.append(videos[video]["path"] + "{0:06d}".format(start_index + j + 1) + ".jpg")
                     # remove appearing pedestrians
                     # assume ped id starts at 1
-                    ped_ids_from_first_frame = sequence[0, np.where(sequence[0, :, 0] != 0), 0]
+                    ped_ids_from_first_frame = sequence[:remaining_peds_idx, np.where(sequence[:remaining_peds_idx, :, 0] != 0), 0]
+
                     not_remaining_ped_idx = np.logical_not(np.isin(sequence[:, :, 0], ped_ids_from_first_frame))
                     sequence[not_remaining_ped_idx] = 0
 
