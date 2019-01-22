@@ -1,6 +1,6 @@
 import torch.nn as nn
 from yolo.yolo_encoder import YoloEncoder
-from flow import FlowNetSEncoder
+from Flow import FlowNetSEncoder
 from yolo.yolo_lstm_part import YoloLSTM_part
 import torchvision.transforms as transforms
 from yolo.yolo_utils import *
@@ -17,7 +17,7 @@ class YoloLSTM(nn.Module):
         if freeze_encoder:
             for param in self.encoder.parameters():
                 param.requires_grad = False
-        self.lstm_part = YoloLSTM_part(batch_size=batch_size)
+        self.lstm_part = YoloLSTM_part(batch_size=batch_size, input_size=(image_size//32, image_size//32))
 
     def forward(self, input):
 
@@ -57,7 +57,7 @@ class YoloLSTM(nn.Module):
 
     def load_pretrained_weights(self, path):
         device = next(self.encoder.parameters()).device
-        load_strict = True
+        load_strict = False
         model_state_dict = torch.load(path, map_location=device)['model_state_dict']
         del model_state_dict["stage3_conv2.weight"]
         del model_state_dict["stage3_conv1.0.weight"]

@@ -14,6 +14,9 @@ import time
 from dataset_utils.datasets.MOT_bb_singleframe import MOT_bb_singleframe
 from dataset_utils.datasets.MOT_bb_singleframe import MOT_bb_singleframe_eval
 import dataset_utils.MOT_utils as motu
+from torch.optim.lr_scheduler import StepLR
+from dataset_utils.datasets.MotBBImageSingle import *
+from torch.utils.data import DataLoader, Subset
 
 
 class Opt(object):
@@ -48,7 +51,7 @@ def writeLossToSummary(writer, prefix, loss, loss_coord, loss_conf, index):
     writer.add_scalar(prefix + '/Confidence_loss', loss_conf, index)
 
 
-def loadTrainEvalSet(opt):
+def loadTrainEvalSet1(opt):
     trans = torchvision.transforms.Compose([torchvision.transforms.Resize((opt.image_size, opt.image_size))])
     training_set = MOT_bb_singleframe(opt.dataset_file, transform=trans)
     training_loader = DataLoader(training_set, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers,
@@ -57,6 +60,17 @@ def loadTrainEvalSet(opt):
     eval_set = MOT_bb_singleframe_eval(opt.dataset_file, transform=trans)
     eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, num_workers=opt.num_workers,
                              collate_fn=custom_collate_fn)
+    return training_set, training_loader, eval_set, eval_loader
+
+
+def loadTrainEvalSet(opt):
+    dataset = MotBBImageSingle('dataset_utils/Mot17_test_single.txt', use_only_first_video=False, seq_length=1)
+    training_set = Subset(dataset, range(0, dataset.valid_begin))
+    eval_set = Subset(dataset, range(dataset.valid_begin, len(dataset)))
+    training_loader = DataLoader(training_set, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers,
+                              drop_last=False)
+    eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers,
+                              drop_last=False)
     return training_set, training_loader, eval_set, eval_loader
 
 
@@ -106,12 +120,15 @@ def train(opt):
         opt.optimizer = torch.optim.Adam(opt.model.parameters(), lr=opt.learning_rate, betas=(opt.momentum, 0.999),
                                          weight_decay=opt.decay)
 
+    scheduler = StepLR(opt.optimizer, step_size=1, gamma=0.75)
+
     epoch_len = len(training_loader)
     for epoch in range(opt.num_epoches):
+        training_set.dataset.is_training = True
         print('num epoch: {:4d}'.format(epoch))
+        scheduler.step()
         opt.model.train()
-        for img_nr, (img, gt) in enumerate(training_loader):
-            break
+        for img_nr, (gt, img) in enumerate(training_loader):
             if torch.cuda.is_available() and opt.useCuda:
                 img = Variable(img.cuda(), requires_grad=True)
             else:
@@ -120,19 +137,20 @@ def train(opt):
             logits = opt.model(img)
             loss, loss_coord, loss_conf = opt.criterion(logits, gt)
             writeLossToSummary(writer, 'Train', loss.item(),
-                               loss_coord.item(), loss_conf.item(), epoch*epoch_len + img_nr)
+                               loss_coord.item(), loss_conf.item(), epoch * epoch_len + img_nr)
             loss.backward()
             opt.optimizer.step()
 
         # eval stuff
         opt.model.eval()
+        eval_set.dataset.is_training = False
         loss_ls = []
         loss_coord_ls = []
         loss_conf_ls = []
         all_ap = []
         all_ap1 = []
         for te_iter, te_batch in enumerate(eval_loader):
-            te_image, te_label = te_batch
+            te_label, te_image = te_batch
             num_sample = len(te_label)
             if torch.cuda.is_available() and opt.useCuda:
                 te_image = te_image.cuda()
@@ -140,11 +158,13 @@ def train(opt):
                 te_logits = opt.model(te_image)
                 batch_loss, batch_loss_coord, batch_loss_conf = opt.criterion(te_logits, te_label)
                 for i in range(num_sample):
-                    ap = get_ap(te_logits[0].unsqueeze(0), gt[0], opt.image_size, opt.image_size,opt.model.anchors, .5)
-                    ap1 = get_ap(te_logits[0].unsqueeze(0), gt[0], opt.image_size, opt.image_size,opt.model.anchors, .8)
-                    all_ap.append(ap)
-                    all_ap1.append(ap1)
-                #if te_iter % 10 ==0:
+                    ap = get_ap(te_logits[i], filter_non_zero_gt_without_id(te_label[i]), opt.image_size, opt.image_size, opt.model.anchors, .5)
+                    ap1 = get_ap(te_logits[i], filter_non_zero_gt_without_id(te_label[i]), opt.image_size, opt.image_size, opt.model.anchors, .8)
+                    if not np.isnan(ap):
+                        all_ap.append(ap)
+                    if not np.isnan(ap1):
+                        all_ap1.append(ap1)
+                # if te_iter % 10 ==0:
                 #    img = np.array(draw_img(te_logits, te_image[0], opt.image_size, opt.model.anchors))
                 #    print(img.shape)
                 #    print(img.dtype)
@@ -164,7 +184,7 @@ def train(opt):
 
         torch.save({'epoch': epoch, 'model_state_dict': opt.model.state_dict(),
                     'optimizer_state_dict': opt.optimizer.state_dict()},
-                   opt.log_path+'/snapshot{:04d}.tar'.format(epoch))
+                   opt.log_path + '/snapshot{:04d}.tar'.format(epoch))
     writer.close()
 
 
@@ -176,5 +196,5 @@ if __name__ == "__main__":
     opt.model = Yolo(0, anchors=[(0.215, 0.8575), (0.3728125, 1.8225), (0.621875, 2.96625),
                                             (1.25, 6.12), (3.06125, 11.206875)])
     loadYoloBaseWeights(opt.model, opt)
-    opt.criterion = yloss(opt.model.anchors, opt.reduction)
+    opt.criterion = yloss(opt.model.anchors, opt.reduction, filter_fkt=filter_non_zero_gt_without_id)
     train(opt)
