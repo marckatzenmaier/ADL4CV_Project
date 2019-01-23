@@ -56,6 +56,47 @@ class MotBBImageSequence(MotBBSequence):
         return len(self.sequences)
 
 
+class MotBBImageSequenceRam(MotBBSequence):
+    """
+    dataset which loads each frame individual
+    """
+    def __init__(self, paths_file, seq_length=20, new_height=416, new_width=416, step=5,
+                 valid_ratio=0.2, use_only_first_video=False, loader=default_loader, transform=None):
+        super(MotBBImageSequence, self).__init__(paths_file, seq_length, new_height, new_width, step,
+                                                 valid_ratio, use_only_first_video)
+        self.loader = loader
+        if transform is not None:
+            self.transf = trans.Compose([trans.Resize((new_height, new_width)), transform, trans.ToTensor()])
+        else:
+            self.transf = trans.Compose([trans.Resize((new_height, new_width)), trans.ToTensor()])
+
+        self.image_sequences = []
+        for i in range(self.sequences):
+            images = torch.zeros([self.seq_length, 3, self.im_size[0], self.im_size[1]], dtype=torch.float32)
+            for j in range(self.seq_length):
+                images[j] = self.transf(self.loader(self.frame_paths[i][j]))
+            self.image_sequences.append(images)
+
+    def __getitem__(self, index):
+        """
+        Returns sequence of boxes with static length and frames .
+        :param index:
+        :return: Numpy array with shape (seq_length, 120, 5) (most of the 120 entries will be zeroes)
+
+        """
+        return self.sequences[index][:-1], self.sequences[index][1:], \
+               self.image_sequences[index][:-1], self.image_sequences[index][1:]
+
+    def get_image_paths(self, index):
+        return self.frame_paths[index][:-1], self.frame_paths[index][1:]
+
+    def __len__(self):
+        """
+        len of the dataset
+        """
+        return len(self.sequences)
+
+
 if __name__ == "__main__":
     # debug
     os.chdir("D:/Nikita/Documents/Projekte/ADL4CV_Project")
