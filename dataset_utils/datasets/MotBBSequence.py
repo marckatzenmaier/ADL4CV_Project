@@ -161,7 +161,12 @@ class MotBBSequence(Dataset):
                             frames.append(videos[video]["path"] + "{0:06d}".format(start_index + j + 1) + ".jpg")
                     # remove appearing pedestrians
                     # assume ped id starts at 1
-                    ped_ids_from_first_frame = sequence[:remaining_peds_idx, np.where(sequence[:remaining_peds_idx, :, 0] != 0), 0]
+                    if remaining_peds_idx == 0:
+                        ped_ids_from_first_frame = sequence[0,
+                                                   np.where(sequence[0, :, 0] != 0), 0]
+                    else:
+                        ped_ids_from_first_frame = sequence[:remaining_peds_idx,
+                                                   np.where(sequence[:remaining_peds_idx, :, 0] != 0), 0]
 
                     not_remaining_ped_idx = np.logical_not(np.isin(sequence[:, :, 0], ped_ids_from_first_frame))
                     sequence[not_remaining_ped_idx] = 0
