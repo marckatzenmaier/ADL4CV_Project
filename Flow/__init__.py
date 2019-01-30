@@ -1,1 +1,1 @@
-from .FlowNet import FlowNetSEncoder, FlowNetS, preprocess, FlowNetSBigEncoder
+from .FlowNet import FlowNetSEncoder, FlowNetS, preprocess
