@@ -104,16 +104,10 @@ class FlowNetS(nn.Module):
 
         return flow2
 
-    def weight_parameters(self):
-        return [param for name, param in self.named_parameters() if 'weight' in name]
-
-    def bias_parameters(self):
-        return [param for name, param in self.named_parameters() if 'bias' in name]
-
 
 class FlowNetSEncoder(nn.Module):
 
-    def __init__(self, batchNorm=True):
+    def __init__(self, batchNorm=False, image_size=416):
         super(FlowNetSEncoder, self).__init__()
 
         self.batchNorm = batchNorm
@@ -147,6 +141,11 @@ class FlowNetSEncoder(nn.Module):
         flow6_up    = self.upsampled_flow6_to_5(flow6)
         out_deconv5 = self.leaky_relu(self.deconv5(out_conv6))
 
-        concat5 = torch.cat((out_deconv5, flow6_up), 1)  # first try without tensor from earlier layer
+        if x.shape[-1] == 416:
+            concat5 = torch.cat((out_deconv5, flow6_up), 1)  # first try without tensor from earlier layer
+        elif x.shape[-1] == 832:
+            concat5 = torch.cat((out_conv5, out_deconv5, flow6_up), 1)
+        else:
+            concat5 = None
 
         return concat5

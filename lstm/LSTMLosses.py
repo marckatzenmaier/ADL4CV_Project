@@ -69,6 +69,7 @@ def mean_squared_trajectory_error(pred_box_list, metric):
                 target_box = np.where(output[batch_id, :, 0] == box_id)
                 target_box = output[batch_id, target_box, 1:]
                 error.append(metric(target_box, target[batch_id, box, 1:]))
+    return np.mean(error)
 
 #def iou(box_1, box_2):
 #

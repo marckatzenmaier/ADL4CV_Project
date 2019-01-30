@@ -1,9 +1,8 @@
-
-from Flow.FlowNet import FlowNetS
+from flow import *
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.misc import  imread
+from scipy.misc import  imread, imresize
 
 
 def flow2rgb(flow_map, max_value):
@@ -22,23 +21,23 @@ def flow2rgb(flow_map, max_value):
 
 # taken from https://github.com/ClementPinard/FlowNetPytorch (gifs, weights ...)
 # used example gifs from this github and split them to generate the images
-net = FlowNetS(False)
+net = FlowNetSBigEncoder(False)
 model_path = "../models/flownets_EPE1.951.pth.tar"
 net.load_state_dict(torch.load(model_path)['state_dict'], strict=True)
 
 # load images
-img_1 = imread("im1.gif").astype(np.float32)
+img_1 = imresize(imread("000007.jpg"), [832, 832]).astype(np.float32)
+# flownet expects bgr -> roll over the last axis (channel) and rearrange for pytorch
 img_1 = np.roll(img_1, 1, axis=-1).transpose((2, 0, 1))
 img_1 /= 255.0
 img_1 += -0.5
 
-img_2 = imread("im2.gif").astype(np.float32)
+img_2 = imresize(imread("000008.jpg"), [832, 832]).astype(np.float32)
 img_2 = np.roll(img_2, 1, axis=-1).transpose((2, 0, 1))
 img_2 /= 255.0
 img_2 += -0.5
 
 batch = torch.from_numpy(np.vstack([img_1, img_2])).unsqueeze(0)
-print(batch.shape)
 flow = net(batch)
 flow = flow2rgb(flow[0], None)
 plt.imshow(flow.transpose(1, 2, 0))
