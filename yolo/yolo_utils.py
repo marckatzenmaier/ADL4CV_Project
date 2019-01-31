@@ -156,6 +156,7 @@ def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold):
     return filter_box_params(logits_to_box_params(logits, anchors),
                              image_size, anchors, conf_threshold, nms_threshold)
 
+
 def draw_img(logits, img, img_size, anchors, conf_threshold=.25, nms_threshold=.5):
     """
     drawes the boxes into the image
@@ -169,6 +170,7 @@ def draw_img(logits, img, img_size, anchors, conf_threshold=.25, nms_threshold=.
     img = Image.fromarray(img.astype(np.uint8), 'RGB')
     img = make_boxed_img_ccwh(img, boxes, 1, 1)
     return img
+
 
 def make_boxed_img_ccwh(img, boxes, width_ratio, height_ratio, width=416, height=416):
     """
@@ -185,6 +187,7 @@ def make_boxed_img_ccwh(img, boxes, width_ratio, height_ratio, width=416, height
             drawrect(imgdraw, [(xmin, ymin), (xmax, ymax)], outline=(255, 50, 50), width=2)
     return img
 
+
 def drawrect(drawcontext, xy, outline=None, width=2):
     """
     draw box with bigger line
@@ -192,6 +195,7 @@ def drawrect(drawcontext, xy, outline=None, width=2):
     (x1, y1), (x2, y2) = xy
     points = (x1, y1), (x2, y1), (x2, y2), (x1, y2), (x1, y1)
     drawcontext.line(points, fill=outline, width=width)
+
 
 def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
     """
@@ -223,10 +227,28 @@ def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
                                                     method=MethodAveragePrecision.EveryPointInterpolation)
     return metricsPerClass[0]['AP']
 
+
 def filter_non_zero_gt(gt):
     """used to filter only existing bb for loss"""
     return gt[gt[:, 0] != 0.0]
 
+
 def filter_non_zero_gt_without_id(gt):
     """used to filter only existing bb for loss"""
     return gt[gt[:, 3] != 0.0]
+
+
+def draw_boxes_opencv(img, boxes):
+    """
+    :param img: image in opencv format
+    :param boxes: numpy array with bounding boxes of shape [Number_boxes, 4] (in format ccwh)
+    :return: image with added boxes
+    """
+    width = float(img.shape[1])
+    height = float(img.shape[0])
+    for i in range(boxes.shape[0]):
+        cv2.rectangle(img,
+                      (int((boxes[i, 0] - boxes[i, 2] / 2) * width), int((boxes[i, 1] - boxes[i, 3] / 2) * height)),
+                      (int((boxes[i, 0] + boxes[i, 2] / 2) * width), int((boxes[i, 1] + boxes[i, 3] / 2) * height)),
+                      (0, 255, 0), 1)
+    return img

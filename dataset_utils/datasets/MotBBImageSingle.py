@@ -8,16 +8,6 @@ from dataset_utils.datasets.data_augmentation import *
 import cv2
 from yolo.yolo_utils import filter_non_zero_gt
 
-def draw_boxes_opencv(img, boxes):
-    width = float(img.shape[1])
-    height = float(img.shape[0])
-    for i in range(boxes.shape[0]):
-        cv2.rectangle(img,
-                      (int((boxes[i, 0] - boxes[i, 2] / 2) * width), int((boxes[i, 1] - boxes[i, 3] / 2) * height)),
-                      (int((boxes[i, 0] + boxes[i, 2] / 2) * width), int((boxes[i, 1] + boxes[i, 3] / 2) * height)),
-                      (0, 255, 0), 1)
-    return img
-
 class MotBBImageSingle(MotBBSequence):
     """
     dataset which loads each frame individual
