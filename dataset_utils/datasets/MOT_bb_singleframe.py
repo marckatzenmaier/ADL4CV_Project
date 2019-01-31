@@ -1,3 +1,8 @@
+"""
+This classes where replaced by MotBBImageSingle
+@author Marc Katzenmaier
+"""
+
 from torch.utils.data import Dataset
 from torchvision.datasets.folder import default_loader
 import dataset_utils.MOT_utils as motu
@@ -22,7 +27,7 @@ class MOT_bb_singleframe(Dataset):
         used_index = [0, 2, 3, 4, 5]
         self.all_gt = np.zeros([0, 5])
         self.all_imagepaths = []
-        self.num_classes = 80  # todo remove its only for first test with loss requires class
+        self.num_classes = 80
 
         for path in paths:
             gt, img, info = motu.get_gt_img_inf(path)
