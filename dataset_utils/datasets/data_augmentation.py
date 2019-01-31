@@ -1,9 +1,12 @@
+"""
+@author Marc Katzenmaier
+"""
 import numpy as np
 from random import uniform
 import cv2
 
-''' all functions take as input data (image, gt_boxes) where the boxes need to be in ccwh format
- and normalized by the image width and height, it will be returned the same format'''
+""" all functions take as input data (image, gt_boxes) where the boxes need to be in ccwh format
+ and normalized by the image width and height, it will be returned the same format"""
 class Compose(object):
 
     def __init__(self, transforms):
@@ -16,13 +19,20 @@ class Compose(object):
 
 
 class Crop(object):
-    # fixed und  tested
+    """
+    Crops a random part of the image it remains at least 1-max_crop of the image in both dimensions remaining
+    only applied with probability prob
+    """
     def __init__(self, max_crop=0.6, prob=0.5):
         super().__init__()
         self.max_crop = max_crop
         self.prob = prob
 
     def __call__(self, data):
+        """
+        :param data: tuple of (image, bounding_boxes[num_boxes, 4])
+        :return: Croped image
+        """
         image, label = data
         if uniform(0, 1) < self.prob:
             height, width = image.shape[:2]
@@ -69,7 +79,9 @@ class Crop(object):
 
 
 class VerticalFlip(object):
-    # tested works
+    """
+    Flips the image and boxes vertical with probability of prob
+    """
     def __init__(self, prob=0.5):
         super().__init__()
         self.prob = prob
@@ -83,7 +95,9 @@ class VerticalFlip(object):
 
 
 class HSVAdjust(object):
-    # tested works
+    """
+    Applies small modification in HSV space with probability of prob
+    """
     def __init__(self, hue=30, saturation=1.5, value=1.5, prob=0.5):
         super().__init__()
         self.hue = hue
@@ -114,9 +128,9 @@ class HSVAdjust(object):
 
 
 class Resize(object):
-    # todo implement random size(x*32) since fully convolutional
-    # todo normalized or not normalized box coordinates ??? what does the loss need
-    # todo all need to be also working for sequenze
+    """
+    Resize the image to image_size * image_size, box parameters stay the same since the are relativ to width/height
+    """
     def __init__(self, image_size):
         super().__init__()
         self.image_size = image_size
@@ -124,7 +138,4 @@ class Resize(object):
     def __call__(self, data):
         image, label = data
         image = cv2.resize(image, (self.image_size, self.image_size))
-        width = height = self.image_size
-        #label[:, [0, 2]] *= width
-        #label[:, [1, 3]] *= height
         return image, label
