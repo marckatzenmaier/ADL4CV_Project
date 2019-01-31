@@ -1,4 +1,6 @@
-
+"""
+@author: Marc Katzenmaier
+"""
 import torch.nn as nn
 import torch
 from lstm import ConvLSTMCell
@@ -6,6 +8,9 @@ from torch.autograd import Variable
 
 
 class YoloLSTM_part(nn.Module):
+    """
+    LSTM part of our YoloLSTM network
+    """
     def __init__(self, input_size=(13, 13), input_dim=1024, hidden_dim=1024, batch_size=1,
                  num_anchors=5):
         super(YoloLSTM_part, self).__init__()
@@ -22,7 +27,12 @@ class YoloLSTM_part(nn.Module):
         return output
 
     def reinit_lstm(self, batch_size):
-        dev = next(self.parameters()).device  # torch.device("cuda")#self.hidden.device
+        """
+        used to reinit the hidden state of the LSTM should be called always if the batch_size changes,
+         otherwise there will occur error
+        :param batch_size: input batch size need to be known and can't change
+        """
+        dev = next(self.parameters()).device
         self.hidden, self.cell = (Variable(torch.zeros(batch_size, self.lstm_cell.hidden_dim,
                                                         self.lstm_cell.height, self.lstm_cell.width).to(dev)),
                                   Variable(torch.zeros(batch_size, self.lstm_cell.hidden_dim,
