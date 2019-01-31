@@ -1,9 +1,14 @@
-
+"""
+@author: Marc Katzenmaier
+"""
 import torch.nn as nn
 import torch
 
 
 class YoloEncoder(nn.Module):
+    """
+    striped Yolo network the last two conv layers where removed
+    """
     def __init__(self, anchors=[(0.215, 0.8575), (0.3728125, 1.8225), (0.621875, 2.96625),
                                             (1.25, 6.12), (3.06125, 11.206875)]):
         super(YoloEncoder, self).__init__()

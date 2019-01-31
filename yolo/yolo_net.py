@@ -1,5 +1,6 @@
 """
 @author: Viet Nguyen <nhviet1009@gmail.com>
+@author: Marc Katzenmaier (added the helper functions)
 """
 import torch.nn as nn
 import torch
@@ -116,23 +117,34 @@ class Yolo(nn.Module):
         return modified_logits
 
     def predict_boxes(self, img, nms_threshold=0.5, conf_threshold=0.25):
-        width, height = img.size
-        width_ratio = float(self.image_size) / width
-        height_ratio = float(self.image_size) / height
+        """
+        Runs the network itself and the postprocessing
+        """
         box_logits = self.predict_modified_logits(img)
         predictions = filter_box_params(box_logits, self.image_size, self.anchors, conf_threshold, nms_threshold)
-        return predictions#, width_ratio, height_ratio #TODO return the right boxes for the corresponding image not for 416 image
+        return predictions
 
     def load_snapshot(self, path):
+        """
+        loads a snapshot of this model
+        :param path: snapshot path
+        """
         device = next(self.parameters()).device
         model_state_dict = torch.load(path, map_location=device)['model_state_dict']
         self.load_state_dict(model_state_dict, strict=False)
 
     def load_pretrained_weights(self, path, reinitailise_last_layer=True):
+        """
+        load the given pretrained weights
+        :param path: path to the weights
+        :param reinitailise_last_layer: reinitialise the last layer if True
+        :return:
+        """
         load_strict = False
         device = next(self.parameters()).device
         model_state_dict = torch.load(path, map_location=device)
-        del model_state_dict["stage3_conv2.weight"]
+        if reinitailise_last_layer:
+            del model_state_dict["stage3_conv2.weight"]
         self.load_state_dict(model_state_dict, strict=load_strict)
         self.to(device)
         if reinitailise_last_layer:

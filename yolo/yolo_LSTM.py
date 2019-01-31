@@ -1,3 +1,7 @@
+"""
+@author: Marc Katzenmaier
+@author: Nikita Kister
+"""
 import torch.nn as nn
 from yolo.yolo_encoder import YoloEncoder
 from Flow import FlowNetSEncoder
@@ -7,6 +11,9 @@ from yolo.yolo_utils import *
 
 
 class YoloLSTM(nn.Module):
+    """
+    our YoloLSTM model based on the yolo encoder and convolutional LSTM(yolo_lstm_part)
+    """
     def __init__(self, batch_size, image_size=416, freeze_encoder=True,
                  anchors=[(0.215, 0.8575), (0.3728125, 1.8225), (0.621875, 2.96625),
                           (1.25, 6.12), (3.06125, 11.206875)]):
@@ -26,6 +33,11 @@ class YoloLSTM(nn.Module):
         return output
 
     def reinit_lstm(self, batch_size):
+        """
+        used to reinit the hidden state of the LSTM should be called always if the batch_size changes,
+         otherwise there will occur error
+        :param batch_size: input batch size need to be known and can't change
+        """
         self.lstm_part.reinit_lstm(batch_size)
 
     def predict_modified_logits(self, img):
@@ -43,19 +55,27 @@ class YoloLSTM(nn.Module):
         return modified_logits
 
     def predict_boxes(self, img, nms_threshold=0.5, conf_threshold=0.25):
-        width, height = img.size
-        width_ratio = float(self.image_size) / width
-        height_ratio = float(self.image_size) / height
+        """
+        Runs the network itself and the postprocessing
+        """
         box_logits = self.predict_modified_logits(img)
         predictions = filter_box_params(box_logits, self.image_size, self.anchors, conf_threshold, nms_threshold)
-        return predictions#, width_ratio, height_ratio #TODO return the right boxes for the corresponding image not for 416 image
+        return predictions
 
     def load_snapshot(self, path):
+        """
+        loads a snapshot of this model
+        :param path: snapshot path
+        """
         device = next(self.parameters()).device
         model_state_dict = torch.load(path, map_location=device)['model_state_dict']
         self.load_state_dict(model_state_dict, strict=False)
 
     def load_pretrained_weights(self, path):
+        """
+        loads the encoder path of a given snapshot
+        :param path: path of an Yolo snapshot
+        """
         device = next(self.encoder.parameters()).device
         load_strict = False
         model_state_dict = torch.load(path, map_location=device)['model_state_dict']
