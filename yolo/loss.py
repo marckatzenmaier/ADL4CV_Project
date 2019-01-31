@@ -1,5 +1,6 @@
 """
 @author: Viet Nguyen <nhviet1009@gmail.com>
+@author: Marc Katzenmaier (modified the loss by removing classes and increase speed by removing for loops)
 """
 import torch
 import torch.nn as nn

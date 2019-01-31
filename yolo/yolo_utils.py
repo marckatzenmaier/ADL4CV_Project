@@ -1,20 +1,19 @@
 """
-@author: Viet Nguyen <nhviet1009@gmail.com>
+@author: Marc Katzenmaier
 """
 import torch
 from torch.autograd import Variable
 from torch.utils.data.dataloader import default_collate
-import numpy as np
 from PIL import Image
 from PIL.ImageDraw import ImageDraw
-
-from Object_Detection_Metrics.lib_s.BoundingBox import BoundingBox
-from Object_Detection_Metrics.lib_s.BoundingBoxes import BoundingBoxes
 from Object_Detection_Metrics.lib_s.Evaluator import *
 from Object_Detection_Metrics.lib_s.utils import *
 
 
 def custom_collate_fn(batch):
+    """
+    function to combine the individual images and their box parameter to a batch
+    """
     items = list(zip(*batch))
     items[0] = default_collate(items[0])
     items[1] = list(items[1])
@@ -56,7 +55,16 @@ def logits_to_box_params(logits, anchors):
 
 
 def filter_box_params(box_logits, image_size, anchors, conf_threshold, nms_threshold):
-    """retruns vox as ltwh"""
+    """
+    takes box parameter and retruns only valid boxes based on confidence treshold and non maximum suppression treshold
+     in box type ltwh
+    :param box_logits: modified logits of the net
+    :param image_size: size of the input image feed in to the net
+    :param anchors: of the net
+    :param conf_threshold: Threshold for detecting a bounding box
+    :param nms_threshold: non maximum supression threshold based on the IoU
+    :return: a list of numpy arrays of shape [num_bounding_boxes, 4]
+    """
     num_anchors = len(anchors)
     batch = box_logits.size(0)
     h = box_logits.size(2)
@@ -73,8 +81,7 @@ def filter_box_params(box_logits, image_size, anchors, conf_threshold, nms_thres
     else:
         coords = box_logits.transpose(2, 3)[..., 0:4]
         coords = coords[score_thresh[..., None].expand_as(coords)].view(-1, 4)
-        scores = box_logits[:, :, 4, :][score_thresh] #cls_max[score_thresh]  # class stuff
-        #idx = cls_max_idx[score_thresh] class stuff
+        scores = box_logits[:, :, 4, :][score_thresh]
         detections = torch.cat([coords, scores[:, None]], dim=1)
 
         max_det_per_batch = num_anchors * h * w
@@ -132,21 +139,30 @@ def filter_box_params(box_logits, image_size, anchors, conf_threshold, nms_thres
         if boxes.dim() == 0:
             final_boxes.append([])
         else:
-            boxes *=1
-            #boxes[:, 0:3:2] *= image_size
-            #boxes[:, 0] -= boxes[:, 2] / 2
-            #boxes[:, 1:4:2] *= image_size
-            #boxes[:, 1] -= boxes[:, 3] / 2
-
             final_boxes.append(boxes)
     return final_boxes
 
 
 def post_processing(logits, image_size, anchors, conf_threshold, nms_threshold):
+    """
+    transforms the logits of the net to bounding box parameters
+    :param logits: output of the net
+    :param image_size: height/width of the image since it is square
+    :param anchors: anchors of the net with which it was trained with
+    :param conf_threshold: Threshold for detecting a bounding box
+    :param nms_threshold: non maximum supression threshold based on the IoU
+    :return: a list of numpy arrays of shape [num_bounding_boxes, 4]
+    """
     return filter_box_params(logits_to_box_params(logits, anchors),
                              image_size, anchors, conf_threshold, nms_threshold)
 
 def draw_img(logits, img, img_size, anchors, conf_threshold=.25, nms_threshold=.5):
+    """
+    drawes the boxes into the image
+    :param logits: logits of the network
+    :param img: original image
+    :return: image with drawn boxes
+    """
     img = img.contiguous().cpu().numpy()
     boxes = post_processing(logits, img_size, anchors, conf_threshold, nms_threshold)
     img = img.transpose(1,2,0)*255
@@ -155,6 +171,9 @@ def draw_img(logits, img, img_size, anchors, conf_threshold=.25, nms_threshold=.
     return img
 
 def make_boxed_img_ccwh(img, boxes, width_ratio, height_ratio, width=416, height=416):
+    """
+    helpfunction for draw_img
+    """
     if len(boxes) != 0:
         predictions = boxes[0]
         for pred in predictions:
@@ -163,15 +182,28 @@ def make_boxed_img_ccwh(img, boxes, width_ratio, height_ratio, width=416, height
             xmax = int(min((pred[0] + pred[2]) / width_ratio, width))
             ymax = int(min((pred[1] + pred[3]) / height_ratio, height))
             imgdraw = ImageDraw(img)
-            drawrect(imgdraw, [(xmin, ymin), (xmax, ymax)], outline=(255,50,50), width=2)
+            drawrect(imgdraw, [(xmin, ymin), (xmax, ymax)], outline=(255, 50, 50), width=2)
     return img
 
-def drawrect(drawcontext, xy, outline=None, width=0):
+def drawrect(drawcontext, xy, outline=None, width=2):
+    """
+    draw box with bigger line
+    """
     (x1, y1), (x2, y2) = xy
     points = (x1, y1), (x2, y1), (x2, y2), (x1, y2), (x1, y1)
     drawcontext.line(points, fill=outline, width=width)
 
 def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
+    """
+    returns the AP for the given gt and logits
+    :param logits: output of the net
+    :param gt: gt bounding boxes
+    :param width: width of the image
+    :param height: heigth of the image
+    :param anchors: anchors of the net
+    :param IOU_threshold: threshold for the AP metric when it is declared as true positiv
+    :return: AP value
+    """
     evaluator = Evaluator()
     allBoundingBoxes = BoundingBoxes()
     gt=gt.cpu().numpy()
@@ -179,7 +211,6 @@ def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
         bb = BoundingBox('0', 0, gt[i, 0], gt[i, 1], gt[i, 2], gt[i, 3], CoordinatesType.Absolute,
                          (width, height), bbType=BBType.GroundTruth, format=BBFormat.XYWH)
         allBoundingBoxes.addBoundingBox(bb)
-    #box_logits = logits_to_box_params(logits, anchors)
     coords = filter_box_params(logits_to_box_params(logits, anchors), width, anchors, 0., 0.5)[0]
     coords = coords.cpu().numpy()
     coords[:, [0, 2]] *= width
@@ -193,9 +224,9 @@ def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
     return metricsPerClass[0]['AP']
 
 def filter_non_zero_gt(gt):
-    # used to filter only existing bb for loss
+    """used to filter only existing bb for loss"""
     return gt[gt[:, 0] != 0.0]
 
 def filter_non_zero_gt_without_id(gt):
-    # used to filter only existing bb for loss
+    """used to filter only existing bb for loss"""
     return gt[gt[:, 3] != 0.0]
