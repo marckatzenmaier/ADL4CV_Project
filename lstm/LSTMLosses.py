@@ -1,8 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.functional as f
-import os
 
 
 def prediction_to_box_list(pred_sequence, valid=False):
@@ -10,8 +8,6 @@ def prediction_to_box_list(pred_sequence, valid=False):
     for pred in pred_sequence:
         # goal (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
         input, div, target = pred
-
-
         batch_size = input.shape[0]
 
         # todo handle the case with vanishing boxes
@@ -37,7 +33,7 @@ def prediction_to_box_list(pred_sequence, valid=False):
     return box_list
 
 
-def displacement_error(pred_box_list, metric):
+def displacement_error(pred_box_list, metric, image_size=416.0):
     # take last element of sequence and compare them
     # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
     input, output, target = pred_box_list[-1]
@@ -51,32 +47,56 @@ def displacement_error(pred_box_list, metric):
                     print(np.unique(output[batch_id, :, 0]))
                     print(np.unique(input[batch_id, :, 0]))
                     print(np.unique(target[batch_id, :, 0]))
-                target_box = output[batch_id, target_box[0][0], 1:] * 416
-                error.append(metric(target_box, target[batch_id, box, 1:] * 416))
+                target_box = output[batch_id, target_box[0][0], 1:] * image_size
+                error.append(metric(target_box, target[batch_id, box, 1:] * image_size))
     return np.mean(error)
 
 
 def mean_squared_trajectory_error(pred_box_list, metric):
-    # take last element of sequence and compare them
     # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
-    _, output, target = pred_box_list[-1]
 
     error = []
     for frame in pred_box_list:
         _, output, target = frame
         for batch_id in range(len(target)):
             for box, box_id in enumerate(target[batch_id, :, 0]):
-                target_box = np.where(output[batch_id, :, 0] == box_id)
-                target_box = output[batch_id, target_box, 1:]
-                error.append(metric(target_box, target[batch_id, box, 1:]))
+                if box_id != 0:
+                    target_box = np.where(output[batch_id, :, 0] == box_id)
+                    target_box = output[batch_id, target_box[0][0], 1:] * 416
+                    error.append(metric(target_box, target[batch_id, box, 1:]*416))
     return np.mean(error)
 
-#def iou(box_1, box_2):
-#
-#    intersections = dx * dy
-#    areas = (x2 - x1) * (y2 - y1)
-#    unions = (areas + areas.t()) - intersections
-#    ious = intersections / unions
+
+def mean_iou(pred_box_list, metric):
+    # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
+
+    error = []
+    for frame in pred_box_list:
+        _, output, target = frame
+        for batch_id in range(len(target)):
+            for box, box_id in enumerate(target[batch_id, :, 0]):
+                if box_id != 0:
+                    target_box = np.where(output[batch_id, :, 0] == box_id)
+                    target_box = output[batch_id, target_box[0][0], 1:] * 416
+                    error.append(metric(target_box, target[batch_id, box, 1:]*416))
+    return np.mean(error)
+
+
+def box_iou(box_1, box_2):
+    b1x1, b1y1 = (box_1[:2] - (box_1[2:4] / 2))
+    b1x2, b1y2 = (box_1[:2] + (box_1[2:4] / 2))
+    b2x1, b2y1 = (box_2[:2] - (box_2[2:4] / 2))
+    b2x2, b2y2 = (box_2[:2] + (box_2[2:4] / 2))
+
+    dx = np.clip(min(b1x2, b2x2) - max(b1x1, b2x1), 0, 1)
+    dy = np.clip(min(b1y2, b2y2) - max(b1y1, b2y1), 0, 1)
+    intersections = dx * dy
+
+    areas1 = (b1x2 - b1x1) * (b1y2 - b1y1)
+    areas2 = (b2x2 - b2x1) * (b2y2 - b2y1)
+    unions = (areas1 + areas2) - intersections
+
+    return intersections / unions
 
 
 def center_distance(box_1, box_2):
@@ -103,7 +123,6 @@ class NaiveLoss(nn.modules.loss._Loss):
 
         input = input[:, :, :, :, 1:]
         target = target[:, :, :, :, 1:]
-        #print(torch.masked_select(pred, (pred.detach() * mask.detach() > 0).byte()))
         return torch.sum(mask * torch.pow((target - input - pred), 2)) / torch.nonzero(mask).size(0)
 
     def to_yolo(self, input, target, thresh=0.0, use_iou=False):
