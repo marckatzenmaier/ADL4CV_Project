@@ -33,7 +33,7 @@ class MotBBImageSingle(MotBBSequence):
         for i in range(self.seq_length):
             image = cv2.imread(self.frame_paths[index][i])
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            boxes = filter_non_zero_gt(self.sequences[index][0].copy())[:, 1:5] # boxes in ccwh
+            boxes = filter_non_zero_gt(self.sequences[index][0].copy()) # boxes in ccwh
             boxes[:, [0, 2]] /= float(self.im_size[1])
             boxes[:, [1, 3]] /= float(self.im_size[0])  # boxes ccwh normalised
             if self.augment and self.is_training:
