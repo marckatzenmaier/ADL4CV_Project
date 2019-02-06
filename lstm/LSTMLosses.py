@@ -1,6 +1,10 @@
+"""
+@author Nikita Kister
+"""
 import numpy as np
 import torch
 import torch.nn as nn
+import scipy.misc as misc
 
 
 def prediction_to_box_list(pred_sequence, valid=False):
@@ -33,6 +37,36 @@ def prediction_to_box_list(pred_sequence, valid=False):
     return box_list
 
 
+def draw_pred_sequence(box_list, images, seq_length, obs_length, name, image_size=416):
+    # draw the predicted path
+    image = images[obs_length]
+    image = misc.imresize(image, (image_size, image_size))
+    for i in range(seq_length):
+        boxes_in, boxes_pred, boxes_tar = box_list[i]
+        boxes_pred = np.squeeze(boxes_pred) * image_size
+        boxes_tar = np.squeeze(boxes_tar) * image_size
+
+        # draw predicted boxes
+        for box in range(len(boxes_pred)):
+            if np.sum(boxes_pred[box, 1:]) != 0:
+
+                x = max(min(boxes_pred[box, 1], image_size - 1), 0)
+                y = max(min(boxes_pred[box, 2], image_size - 1), 0)
+                if box == 0:
+                    image[int(y), int(x)] = [255, 255, 0]
+                else:
+                    image[int(y), int(x)] = [255, 0, 0]
+
+        # draw target boxes
+        for box in range(len(boxes_tar)):
+            if np.sum(boxes_tar[box, 0]) != 0:
+                x = max(min(boxes_tar[box, 1], image_size - 1), 0)
+                y = max(min(boxes_tar[box, 2], image_size - 1), 0)
+
+                image[int(y), int(x)] = [0, 255, 0]
+
+    misc.imsave(name, image)
+
 def displacement_error(pred_box_list, metric, image_size=416.0):
     # take last element of sequence and compare them
     # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
@@ -52,7 +86,7 @@ def displacement_error(pred_box_list, metric, image_size=416.0):
     return np.mean(error)
 
 
-def mean_squared_trajectory_error(pred_box_list, metric):
+def mean_squared_trajectory_error(pred_box_list, metric, image_size=416):
     # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
 
     error = []
@@ -62,12 +96,12 @@ def mean_squared_trajectory_error(pred_box_list, metric):
             for box, box_id in enumerate(target[batch_id, :, 0]):
                 if box_id != 0:
                     target_box = np.where(output[batch_id, :, 0] == box_id)
-                    target_box = output[batch_id, target_box[0][0], 1:] * 416
-                    error.append(metric(target_box, target[batch_id, box, 1:]*416))
+                    target_box = output[batch_id, target_box[0][0], 1:] * image_size
+                    error.append(metric(target_box, target[batch_id, box, 1:]*image_size))
     return np.mean(error)
 
 
-def mean_iou(pred_box_list, metric):
+def mean_iou(pred_box_list, image_size=416):
     # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
 
     error = []
@@ -77,19 +111,19 @@ def mean_iou(pred_box_list, metric):
             for box, box_id in enumerate(target[batch_id, :, 0]):
                 if box_id != 0:
                     target_box = np.where(output[batch_id, :, 0] == box_id)
-                    target_box = output[batch_id, target_box[0][0], 1:] * 416
-                    error.append(metric(target_box, target[batch_id, box, 1:]*416))
+                    target_box = output[batch_id, target_box[0][0], 1:] * image_size
+                    error.append(box_iou(target_box, target[batch_id, box, 1:]*image_size, image_size))
     return np.mean(error)
 
 
-def box_iou(box_1, box_2):
+def box_iou(box_1, box_2, image_size):
     b1x1, b1y1 = (box_1[:2] - (box_1[2:4] / 2))
     b1x2, b1y2 = (box_1[:2] + (box_1[2:4] / 2))
     b2x1, b2y1 = (box_2[:2] - (box_2[2:4] / 2))
     b2x2, b2y2 = (box_2[:2] + (box_2[2:4] / 2))
 
-    dx = np.clip(min(b1x2, b2x2) - max(b1x1, b2x1), 0, 1)
-    dy = np.clip(min(b1y2, b2y2) - max(b1y1, b2y1), 0, 1)
+    dx = np.clip(min(b1x2, b2x2) - max(b1x1, b2x1), 0, image_size)
+    dy = np.clip(min(b1y2, b2y2) - max(b1y1, b2y1), 0, image_size)
     intersections = dx * dy
 
     areas1 = (b1x2 - b1x1) * (b1y2 - b1y1)
@@ -214,8 +248,8 @@ class NaiveLoss(nn.modules.loss._Loss):
         boxes1 = torch.Tensor(boxes1)
         boxes2 = torch.Tensor(boxes2)
 
-        b1x1, b1y1 = (boxes1[:,:, :2] - (boxes1[:,:, 2:4] / 2)).split(1, 2)
-        b1x2, b1y2 = (boxes1[:,:, :2] + (boxes1[:,:, 2:4] / 2)).split(1, 2)
+        b1x1, b1y1 = (boxes1[:, :, :2] - (boxes1[:, :, 2:4] / 2)).split(1, 2)
+        b1x2, b1y2 = (boxes1[:, :, :2] + (boxes1[:, :, 2:4] / 2)).split(1, 2)
         b2x1, b2y1 = (boxes2[:, :2] - (boxes2[:, 2:4] / 2)).split(1, 1)
         b2x2, b2y2 = (boxes2[:, :2] + (boxes2[:, 2:4] / 2)).split(1, 1)
 

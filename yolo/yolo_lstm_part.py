@@ -34,6 +34,6 @@ class YoloLSTM_part(nn.Module):
         """
         dev = next(self.parameters()).device
         self.hidden, self.cell = (Variable(torch.zeros(batch_size, self.lstm_cell.hidden_dim,
-                                                        self.lstm_cell.height, self.lstm_cell.width).to(dev)),
+                                                        self.lstm_cell.height, self.lstm_cell.width).to(dev), requires_grad=True),
                                   Variable(torch.zeros(batch_size, self.lstm_cell.hidden_dim,
-                                                        self.lstm_cell.height, self.lstm_cell.width).to(dev)))
+                                                        self.lstm_cell.height, self.lstm_cell.width).to(dev), requires_grad=True))

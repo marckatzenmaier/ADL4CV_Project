@@ -5,6 +5,7 @@
 import torch.nn as nn
 from yolo.yolo_encoder import YoloEncoder
 from Flow import FlowNetSEncoder
+from lstm import ConvLSTMCell
 from yolo.yolo_lstm_part import YoloLSTM_part
 import torchvision.transforms as transforms
 from yolo.yolo_utils import *
@@ -90,6 +91,7 @@ class YoloLSTM(nn.Module):
 
 
 class YoloFlowLSTM(nn.Module):
+    # todo
     def __init__(self, batch_size, image_size=416, freeze_encoder=True,
                  anchors=[(0.215, 0.8575), (0.3728125, 1.8225), (0.621875, 2.96625),
                           (1.25, 6.12), (3.06125, 11.206875)]):
@@ -99,17 +101,17 @@ class YoloFlowLSTM(nn.Module):
         self.encoder = YoloEncoder()
         self.flownet = FlowNetSEncoder(False)
 
-        # reduce flow dimensions to 13 by 13 with 512 channels
+        # reduce Flow dimensions to 13 by 13 with 512 channels
         self.conv_flow = nn.Conv2d(512 + 2, 512, kernel_size=2, bias=True)  # not sure about bias
         if freeze_encoder:
             for param in self.encoder.parameters():
                 param.requires_grad = False
             for param in self.flownet.parameters():
                 param.requires_grad = False
-        self.lstm_part = YoloLSTM_part(input_dim=1024+512, batch_size=batch_size)  # todo set the right dimension
+        self.lstm_part = YoloLSTM_part(input_dim=1024+512, batch_size=batch_size)
 
     def forward(self, input):
-        yolo_input, flow_input = input
+        flow_input, yolo_input = input
         yolo_encoding = self.encoder.forward(yolo_input)
         flow_encoding = self.flownet(flow_input)
         flow_encoding = self.conv_flow(flow_encoding)
@@ -120,6 +122,70 @@ class YoloFlowLSTM(nn.Module):
 
     def reinit_lstm(self, batch_size):
         self.lstm_part.reinit_lstm(batch_size)
+
+
+class BigYoloFlowLSTM(nn.Module):
+    def __init__(self, batch_size, image_size=832, freeze_encoder=True,
+                 anchors = [(0.43, 1.715), (0.745625, 3.645),
+                            (1.24375, 5.9325), (2.5, 12.24),
+                            (6.1225, 22.41375)]):
+        super(BigYoloFlowLSTM, self).__init__()
+        self.image_size = image_size
+        self.anchors = anchors
+        self.encoder = YoloEncoder()
+        self.flownet = FlowNetSEncoder(False, image_size=832)
+
+        self.conv_flow = nn.Conv2d(512 + 2 + 512, 512, kernel_size=1, bias=True)
+        if freeze_encoder:
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+            for param in self.flownet.parameters():
+                param.requires_grad = False
+        self.lstm_part = YoloLSTM_part(input_size=(26,26), input_dim=1024+512, batch_size=batch_size)  # todo set the right dimension
+
+    def forward(self, input):
+        flow_input, yolo_input = input
+        yolo_encoding = self.encoder.forward(yolo_input)
+        flow_encoding = self.flownet(flow_input)
+        flow_encoding = self.conv_flow(flow_encoding)
+
+        encoding = torch.cat((yolo_encoding, flow_encoding), 1) # todo
+        output = self.lstm_part.forward(encoding)
+        return output
+
+    def reinit_lstm(self, batch_size):
+        self.lstm_part.reinit_lstm(batch_size)
+
+
+class ConvLSTM(nn.Module):
+    def __init__(self, input_size, input_dim, hidden_dim, batch_size_init):
+        super(ConvLSTM, self).__init__()
+        # layer parameter
+
+        self.input = nn.Conv2d(input_dim, 512, kernel_size=3, padding=1)
+
+        self.lstm = ConvLSTMCell(input_size, 512, hidden_dim, kernel_size=(3, 3), bias=True)
+
+        self.output = nn.Conv2d(hidden_dim, input_dim, kernel_size=3, padding=1)
+
+        self.hidden, self.cell = self.lstm.init_hidden(batch_size_init)
+
+    def forward(self, input):
+        # x = F.relu(self.input(input))
+        x = self.input(input)
+
+        self.hidden, self.cell = self.lstm(x.squeeze(dim=2), (self.hidden, self.cell))
+
+        return self.output(self.hidden)
+
+    def reset_hidden(self, batch_size):
+        self.hidden, self.cell = self.lstm.init_hidden(batch_size)
+
+    def set_hidden(self, hidden, cell):
+        self.hidden = hidden
+        self.cell = cell
+
+
 
 
 

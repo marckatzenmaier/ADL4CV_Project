@@ -1,3 +1,6 @@
+"""
+@author Nikita Kister
+"""
 import torch.nn as nn
 import torch as torch
 import numpy as np

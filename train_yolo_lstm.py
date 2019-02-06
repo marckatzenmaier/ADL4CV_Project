@@ -156,7 +156,7 @@ if __name__ == "__main__":
     if opt.useCuda:
         device = torch.device("cuda")
         opt.model.to(device)
-    opt.criterion = YoloLoss(opt.model.anchors, filter_fkt=filter_non_zero_gt)
+    opt.yolo_loss = YoloLoss(opt.model.anchors, filter_fkt=filter_non_zero_gt)
     opt.num_workers = 0
 
     opt.log_path = './log/yolo_lstm'

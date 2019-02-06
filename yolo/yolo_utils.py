@@ -252,3 +252,28 @@ def draw_boxes_opencv(img, boxes):
                       (int((boxes[i, 0] + boxes[i, 2] / 2) * width), int((boxes[i, 1] + boxes[i, 3] / 2) * height)),
                       (0, 0, 255), 2)
     return img
+
+
+def load_Snapshot_to_yolo_LSTM(model, opt):
+    def remove_flownet_weights(state_dict):
+        del state_dict["deconv4.0.weight"]
+        del state_dict["deconv3.0.weight"]
+        del state_dict["deconv2.0.weight"]
+
+        del state_dict["predict_flow5.weight"]
+        del state_dict["predict_flow4.weight"]
+        del state_dict["predict_flow3.weight"]
+        del state_dict["predict_flow2.weight"]
+
+        del state_dict["upsampled_flow5_to_4.weight"]
+        del state_dict["upsampled_flow4_to_3.weight"]
+        del state_dict["upsampled_flow3_to_2.weight"]
+        return state_dict
+
+    model_state_dict_yolo = torch.load(opt.pre_trained_yolo_path, map_location=opt.device())['model_state_dict']
+    model_state_dict_flow = torch.load(opt.pre_trained_flownet_path, map_location=opt.device())['state_dict']
+
+    del model_state_dict_yolo["stage3_conv2.weight"]
+    model_state_dict_flow = remove_flownet_weights(model_state_dict_flow)
+    model.encoder.load_state_dict(model_state_dict_yolo, strict=True)
+    model.flownet.load_state_dict(model_state_dict_flow, strict=True)

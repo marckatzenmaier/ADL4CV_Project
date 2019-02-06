@@ -1,4 +1,7 @@
-from flow import *
+"""
+@author Nikita Kister
+"""
+from Flow import *
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,7 +24,7 @@ def flow2rgb(flow_map, max_value):
 
 # taken from https://github.com/ClementPinard/FlowNetPytorch (gifs, weights ...)
 # used example gifs from this github and split them to generate the images
-net = FlowNetSBigEncoder(False)
+net = FlowNetSEncoder(False)
 model_path = "../models/flownets_EPE1.951.pth.tar"
 net.load_state_dict(torch.load(model_path)['state_dict'], strict=True)
 

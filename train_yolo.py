@@ -33,9 +33,14 @@ class Opt(object):
         self.num_workers = 4
         self.reinitailise_last_layer = True
         self.model = None
-        self.criterion = None
-        self.optimizer = None
+        self.decoder = None
+        self.yolo_loss = None
+        self.pred_loss = None
+        self.optimizer_encoder = None
+        self.optimizer_decoder = None
         self.conf_threshold = 0.25
+
+
 
     def device(self):
         return torch.device('cuda') if self.useCuda else torch.device('cpu')
@@ -192,10 +197,10 @@ if __name__ == "__main__":
     anchors = [(0.43, 1.715), (0.745625, 3.645), (1.24375, 5.9325), (2.5, 12.24), (6.1225, 22.41375)]
     opt.model = Yolo(0, anchors=anchors)
     loadYoloBaseWeights(opt.model, opt)
-    opt.criterion = yloss(opt.model.anchors, opt.reduction, filter_fkt=filter_non_zero_gt_without_id)
+    opt.yolo_loss = yloss(opt.model.anchors, opt.reduction, filter_fkt=filter_non_zero_gt_without_id)
     opt.log_path = './log/yolo'
     opt.image_size = 832
     opt.model.image_size = opt.image_size
     loadYoloBaseWeights(opt.model, opt)
-    opt.criterion = yloss(opt.model.anchors, opt.reduction, filter_fkt=filter_non_zero_gt_without_id)
+    opt.yolo_loss = yloss(opt.model.anchors, opt.reduction, filter_fkt=filter_non_zero_gt_without_id)
     train(opt)
