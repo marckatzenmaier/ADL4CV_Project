@@ -14,3 +14,6 @@ change the path for the pretrained model in the script
 
 visualize_*.py scripts will produce a output video based on the pretrained models and one sequence part which wasn't
 used for training. If you want to change the sequence or use your own snapshot just change the paths in the scripts
+
+Additionally we provided for completeness the files we used to train our Networks on Google Colab. These are experimental
+and used for rapid prototyping. The final trainings methods are included in the train_*.py scripts
