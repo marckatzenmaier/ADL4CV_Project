@@ -150,7 +150,7 @@ def filter_gt_batch(gt):
 
 if __name__ == "__main__":
     opt = Opt()
-    opt.num_epoches = 10 # todo look up epochs
+    opt.num_epoches = 8
     opt.image_size = 832
     opt.useCuda = False
     opt.learning_rate = 1e-4
