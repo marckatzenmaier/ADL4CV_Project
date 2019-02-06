@@ -1,25 +1,21 @@
-
-import os
-import numpy as np
+"""
+@author Marc Katzenmaier
+This script trains the YOLO network
+"""
 import torch.nn as nn
-import torch
-from torch.utils.data import DataLoader
 from yolo.yolo_utils import *
 from yolo.yolo_net import Yolo
 from yolo.loss import YoloLoss as yloss
-import torchvision
 from tensorboardX import SummaryWriter
 import shutil
-import time
-from dataset_utils.datasets.MOT_bb_singleframe import MOT_bb_singleframe
-from dataset_utils.datasets.MOT_bb_singleframe import MOT_bb_singleframe_eval
-import dataset_utils.MOT_utils as motu
-from torch.optim.lr_scheduler import StepLR
 from dataset_utils.datasets.MotBBImageSingle import *
 from torch.utils.data import DataLoader, Subset
 
 
 class Opt(object):
+    """
+    class containing all parameter for training the network
+    """
     def __init__(self):
         self.batch_size = 1
         self.reduction = 32
@@ -46,25 +42,23 @@ class Opt(object):
 
 
 def writeLossToSummary(writer, prefix, loss, loss_coord, loss_conf, index):
+    """
+    addes all parts of the YOLO loss to the tensorboardX writer
+    :param writer: the tensorboardX writer
+    :param prefix: prefix of the losses eg 'train/' or 'val/'
+    :param loss: the total YOLO loss
+    :param loss_coord: the coordination loss part
+    :param loss_conf: the confidence loss part
+    :param index: which iteration
+    """
     writer.add_scalar(prefix + '/Total_loss', loss, index)
     writer.add_scalar(prefix + '/Coordination_loss', loss_coord, index)
     writer.add_scalar(prefix + '/Confidence_loss', loss_conf, index)
 
 
-def loadTrainEvalSet1(opt):
-    trans = torchvision.transforms.Compose([torchvision.transforms.Resize((opt.image_size, opt.image_size))])
-    training_set = MOT_bb_singleframe(opt.dataset_file, transform=trans)
-    training_loader = DataLoader(training_set, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers,
-                                 collate_fn=custom_collate_fn)
-
-    eval_set = MOT_bb_singleframe_eval(opt.dataset_file, transform=trans)
-    eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, num_workers=opt.num_workers,
-                             collate_fn=custom_collate_fn)
-    return training_set, training_loader, eval_set, eval_loader
-
-
 def loadTrainEvalSet(opt):
-    dataset = MotBBImageSingle('dataset_utils/Mot17_test_single.txt', use_only_first_video=False, seq_length=1)
+    dataset = MotBBImageSingle('dataset_utils/Mot17_test_single.txt', use_only_first_video=False, seq_length=1,
+                               new_height=opt.image_size, new_width=opt.image_size)
     training_set = Subset(dataset, range(0, dataset.valid_begin))
     eval_set = Subset(dataset, range(dataset.valid_begin, len(dataset)))
     training_loader = DataLoader(training_set, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers,
@@ -75,8 +69,12 @@ def loadTrainEvalSet(opt):
 
 
 def loadYoloBaseWeights(yolo_model, opt):
-    # load the model
-    # save convention: https://pytorch.org/tutorials/beginner/saving_loading_models.html
+    """
+    load the model basis weights using https://pytorch.org/tutorials/beginner/saving_loading_models.html
+    as convention
+    :param yolo_model: the model where the weights should be applyed
+    :param opt: option for loading the weights include path of the snapshot and where it should be restored (cpu/cuda)
+    """
     load_strict = False
     if torch.cuda.is_available() and opt.useCuda:
         device = torch.device("cuda")
@@ -92,7 +90,10 @@ def loadYoloBaseWeights(yolo_model, opt):
 
 
 def train(opt):
-    # setup train and eval set
+    """
+    performs the training
+    :param opt: all parameters inclusive network and opimizer are here combined
+    """
     if torch.cuda.is_available() and opt.useCuda:
         torch.cuda.manual_seed(123)
     else:
@@ -120,13 +121,11 @@ def train(opt):
         opt.optimizer = torch.optim.Adam(opt.model.parameters(), lr=opt.learning_rate, betas=(opt.momentum, 0.999),
                                          weight_decay=opt.decay)
 
-    scheduler = StepLR(opt.optimizer, step_size=1, gamma=0.75)
 
     epoch_len = len(training_loader)
     for epoch in range(opt.num_epoches):
         training_set.dataset.is_training = True
         print('num epoch: {:4d}'.format(epoch))
-        scheduler.step()
         opt.model.train()
         for img_nr, (gt, img) in enumerate(training_loader):
             if torch.cuda.is_available() and opt.useCuda:
@@ -158,25 +157,20 @@ def train(opt):
                 te_logits = opt.model(te_image)
                 batch_loss, batch_loss_coord, batch_loss_conf = opt.criterion(te_logits, te_label)
                 for i in range(num_sample):
-                    ap = get_ap(te_logits[i], filter_non_zero_gt_without_id(te_label[i]), opt.image_size, opt.image_size, opt.model.anchors, .5)
-                    ap1 = get_ap(te_logits[i], filter_non_zero_gt_without_id(te_label[i]), opt.image_size, opt.image_size, opt.model.anchors, .8)
+                    ap = get_ap(te_logits[i], filter_non_zero_gt_without_id(te_label[i]), opt.image_size,
+                                opt.image_size, opt.model.anchors, .5)
+                    ap1 = get_ap(te_logits[i], filter_non_zero_gt_without_id(te_label[i]), opt.image_size,
+                                 opt.image_size, opt.model.anchors, .8)
                     if not np.isnan(ap):
                         all_ap.append(ap)
                     if not np.isnan(ap1):
                         all_ap1.append(ap1)
-                # if te_iter % 10 ==0:
-                #    img = np.array(draw_img(te_logits, te_image[0], opt.image_size, opt.model.anchors))
-                #    print(img.shape)
-                #    print(img.dtype)
-                #    print(type(img))
-                #    writer.add_image(f'Val/{epoch}', img)
             loss_ls.append(batch_loss * num_sample)
             loss_coord_ls.append(batch_loss_coord * num_sample)
             loss_conf_ls.append(batch_loss_conf * num_sample)
         te_loss = sum(loss_ls) / eval_set.__len__()
         te_coord_loss = sum(loss_coord_ls) / eval_set.__len__()
         te_conf_loss = sum(loss_conf_ls) / eval_set.__len__()
-        print('{}  {}   {}'.format(te_loss, te_coord_loss, te_conf_loss))
         writer.add_scalar('Val/AP0.5', np.mean(np.array(all_ap)), epoch * epoch_len)
         writer.add_scalar('Val/AP0.8', np.mean(np.array(all_ap1)), epoch * epoch_len)
         writeLossToSummary(writer, 'Val', te_loss.item(),
@@ -190,11 +184,18 @@ def train(opt):
 
 if __name__ == "__main__":
     opt = Opt()
+    opt.batch_size = 10
+    opt.num_epoches = 100
     opt.useCuda = True
-    opt.learning_rate = 1e-5
-    opt.batch_size = 1
-    opt.model = Yolo(0, anchors=[(0.215, 0.8575), (0.3728125, 1.8225), (0.621875, 2.96625),
-                                            (1.25, 6.12), (3.06125, 11.206875)])
+    opt.learning_rate = 1e-4
+    opt.num_workers = 4
+    anchors = [(0.43, 1.715), (0.745625, 3.645), (1.24375, 5.9325), (2.5, 12.24), (6.1225, 22.41375)]
+    opt.model = Yolo(0, anchors=anchors)
+    loadYoloBaseWeights(opt.model, opt)
+    opt.criterion = yloss(opt.model.anchors, opt.reduction, filter_fkt=filter_non_zero_gt_without_id)
+    opt.log_path = './log/yolo'
+    opt.image_size = 832
+    opt.model.image_size = opt.image_size
     loadYoloBaseWeights(opt.model, opt)
     opt.criterion = yloss(opt.model.anchors, opt.reduction, filter_fkt=filter_non_zero_gt_without_id)
     train(opt)
