@@ -1,10 +1,11 @@
 In order to reproduce our results, one can find two kinds of executable scripts visualize_*.py and train_*.py
+or (pretrain_*)
 
 For both kinds of scripts the data is needed to get it download the from here:
 https://motchallenge.net/data/MOT17.zip
 extract it and copy all folders with the from MOT17-**-SDP into the './dataset_utils/datasets/MOT17' Folder
 
-For running the train_yolo.py, visualize_yolo.py, visualize_yolo_lstm.py pretrained models are needed which can be found
+For running the train_yolo.py, visualize_yolo.py, visualize_yolo_lstm.py etc. pretrained models are needed which can be found
 https://drive.google.com/drive/folders/1fv6HbPDP1nclEOLRm6mDg_siSypyJNJ8?usp=sharing
 and should be copied into the './models' folder in order to run the visualize scripts out of the box
 
