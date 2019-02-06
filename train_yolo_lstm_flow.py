@@ -3,12 +3,12 @@ from torch.utils.data import DataLoader, Subset
 from yolo.yolo_LSTM import YoloFlowLSTM
 from yolo.loss import YoloLoss
 from yolo.yolo_utils import logits_to_box_params
-from train_yolo_example import Opt
+from train_yolo import Opt
 import torch
 from flow import preprocess
 from tensorboardX import SummaryWriter
 import shutil
-from train_yolo_example import writeLossToSummary
+from train_yolo import writeLossToSummary
 from lstm.LSTMLosses import NaiveLoss, displacement_error, prediction_to_box_list, center_distance
 from lstm.LSTMModels import ConvLSTM
 
