@@ -1,26 +1,33 @@
+"""
+@author Nikita Kister
+"""
 from torch.utils.data import Dataset
-from torchvision.datasets.folder import default_loader
 import dataset_utils.MOT_utils as motu
 import numpy as np
 import matplotlib.pyplot as plt
-import torch
 import os
 from scipy import misc
 
 
 class MotBBSequence(Dataset):
     """
-    dataset which loads each frame individual
+    dataset which loads each frame individually without the images
     """
 
     def __init__(self, paths_file, seq_length=20, new_height=416, new_width=416, step=5,
                  valid_ratio=0.2, use_only_first_video=False):
         """
-        inits of all file names and bounding boxes
+
+        :param paths_file: path to the file which includes the paths of the images and labels
+        :param seq_length: length of the sequences to be generated
+        :param new_height: resize images to this height
+        :param new_width: resize labels to this width
+        :param step: steps between each sequence
+        :param valid_ratio: number of images used for validation. I.e the last 20% will be used for validation
+        :param use_only_first_video: for debug purposes-> only the first video is used for dataset construction
         """
         # framerate is not constant 05 SDP has 14 fps  vs 02 SDP 30 fps -> could be a problem
         # the movement is also a problem especially if the movement changes for the prediction time
-        # todo include images for debugging -> at the moment the images are too much
         # crop negative boxes (maybe not necessary)
         self.seq_length = seq_length
         self.im_size = (new_height, new_width)
@@ -29,8 +36,7 @@ class MotBBSequence(Dataset):
 
         #            dict    list  list
         # tmp format video->frame->boxes with id
-        test = {"gt": []
-            , "path": ""}
+
         videos_train = {i: {"gt": [], "path": ""} for i in range(len(paths))}
         videos_valid = {i: {"gt": [], "path": ""} for i in range(len(paths))}
         frame_offsets = []
@@ -139,6 +145,15 @@ class MotBBSequence(Dataset):
 
     @staticmethod
     def _intermediate_to_final(videos, seq_length, step, frame_offsets=None, remaining_peds_idx=0):
+        """
+
+        :param videos: internal structure for represenation
+        :param seq_length: same as seq_length  in __init__
+        :param step: same as step in __init__
+        :param frame_offsets:
+        :param remaining_peds_idx: pedestrians which are apearing later as this index in the sequence are discarded
+        :return: final sequences
+        """
         # first idea : assume each frame has at maximum 120 (calc it in stats)
         local_sequences = []
         local_images = []
@@ -181,25 +196,30 @@ class MotBBSequence(Dataset):
 
     def __getitem__(self, index):
         """
-        Returns sequence with static lenght.
-        :param index:
+        Returns sequence with static length.
+        :param index: Index of the sequence
         :return: Numpy array with shape (seq_length, 120, 5) (most of the 120 entries will be zeroes)
         
         """
-        # todo seq_length 20 means that the 20th sample is only used as a target
+        # seq_length 20 means that the 20th sample is only used as a target
         return self.sequences[index][:-1], self.sequences[index][1:], \
                self.frame_paths[index][:-1], self.frame_paths[index][1:]
 
     def get_image_paths(self, index):
+        """
+
+        :param index: index of the sequence
+        :return: list with paths to the corresponding images
+        """
         return self.frame_paths[index][:-1], self.frame_paths[index][1:]
 
     def __len__(self):
         """
-        len of the dataset
+        :return: number of sequences
         """
         return len(self.sequences)
 
-
+"""
 if __name__ == "__main__":
     # debug
     os.chdir("D:/Nikita/Documents/Projekte/ADL4CV_Project")
@@ -228,6 +248,7 @@ if __name__ == "__main__":
 
         plt.imshow(image)
         plt.show()
+"""
 
 
 

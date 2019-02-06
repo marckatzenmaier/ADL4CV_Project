@@ -1,3 +1,6 @@
+"""
+@author Nikita Kister
+"""
 from torch.utils.data import Dataset
 from torchvision.datasets.folder import default_loader
 import dataset_utils.MOT_utils as motu
@@ -12,12 +15,21 @@ import torchvision.transforms as trans
 
 class MotBBImageSequence(MotBBSequence):
     """
-    dataset which loads each frame individual
+    This dataset mangages the images itself in addition to the raw box positions.
     """
     def __init__(self, paths_file, seq_length=20, new_height=416, new_width=416, step=5,
                  valid_ratio=0.2, use_only_first_video=False, loader=default_loader, transform=None):
         super(MotBBImageSequence, self).__init__(paths_file, seq_length, new_height, new_width, step,
                                                  valid_ratio, use_only_first_video)
+        """
+        :param paths_file: path to the file which includes the paths of the images and labels
+        :param seq_length: length of the sequences to be generated
+        :param new_height: resize images to this height
+        :param new_width: resize labels to this width
+        :param step: steps between each sequence
+        :param valid_ratio: number of images used for validation. I.e the last 20% will be used for validation
+        :param use_only_first_video: for debug purposes-> only the first video is used for dataset construction
+        """
         self.loader = loader
         if transform is not None:
             self.transf = trans.Compose([trans.Resize((new_height, new_width)), transform, trans.ToTensor()])
@@ -43,18 +55,24 @@ class MotBBImageSequence(MotBBSequence):
             images[i] = self.transf(self.loader(self.frame_paths[index][i]))
 
 
-        # todo seq_length 20 means that the 20th sample is only used as a target
+        # seq_length 20 means that the 20th sample is only used as a target
         return self.sequences[index][:-1], self.sequences[index][1:], images[:-1], images[1:]
 
     def get_image_paths(self, index):
+        """
+        :param index: index of the sequence
+        :return: list with paths to the corresponding images
+
+        """
         return self.frame_paths[index][:-1], self.frame_paths[index][1:]
 
     def __len__(self):
         """
-        len of the dataset
+        :return: number of sequences
         """
         return len(self.sequences)
 
+"""
 if __name__ == "__main__":
     # debug
     os.chdir("D:/Nikita/Documents/Projekte/ADL4CV_Project")
@@ -65,7 +83,6 @@ if __name__ == "__main__":
     for i in range(19):
         boxes = test_sequence[i]
         image = images[i]
-        # image = np.zeros((416, 416), dtype=np.uint8)
         for box in range(120):
             if np.sum(boxes[box, 1:]) != 0:
                 width = int(boxes[box, 3])
@@ -81,6 +98,7 @@ if __name__ == "__main__":
 
         plt.imshow(image.transpose([1, 2, 0]))
         plt.show()
+"""
 
 
 

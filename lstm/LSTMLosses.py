@@ -8,6 +8,14 @@ import scipy.misc as misc
 
 
 def prediction_to_box_list(pred_sequence, valid=False):
+    """
+
+    :param pred_sequence: list of triples (input, prediction, target)
+    :param valid: dabug purposes
+    :return: list with numpy arrays with shape (batch_size, 120, boxes) boxes: (5) which represent the boxes
+             boxes are still normalied to [0,1] !!
+
+    """
     box_list = []
     for pred in pred_sequence:
         # goal (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
@@ -38,6 +46,16 @@ def prediction_to_box_list(pred_sequence, valid=False):
 
 
 def draw_pred_sequence(box_list, images, seq_length, obs_length, name, image_size=416):
+    """
+
+    :param box_list: list produced by prediction_to_box_list function
+    :param images: image list corresponding to the boxlist
+    :param seq_length: length of the prediction not whole sequence length (len of boxlist)
+    :param obs_length: length of observation (important to know which part of the image list to ignore)
+    :param name: name of the image file to be generated
+    :param image_size: target of the images also used for denormalization
+    :return:
+    """
     # draw the predicted path
     image = images[obs_length]
     image = misc.imresize(image, (image_size, image_size))
@@ -67,7 +85,14 @@ def draw_pred_sequence(box_list, images, seq_length, obs_length, name, image_siz
 
     misc.imsave(name, image)
 
+
 def displacement_error(pred_box_list, metric, image_size=416.0):
+    """
+    :param pred_box_list: list produced by prediction_to_box_list function
+    :param metric: distance metric
+    :param image_size: size of the input images only used for box parameter scaling
+    :return: final displacement error
+    """
     # take last element of sequence and compare them
     # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
     input, output, target = pred_box_list[-1]
@@ -87,6 +112,13 @@ def displacement_error(pred_box_list, metric, image_size=416.0):
 
 
 def mean_squared_trajectory_error(pred_box_list, metric, image_size=416):
+    """
+
+    :param pred_box_list: list produced by prediction_to_box_list function
+    :param metric: distance metric
+    :param image_size: size of the input images only used for box parameter scaling
+    :return: average displacement error
+    """
     # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
 
     error = []
@@ -102,6 +134,12 @@ def mean_squared_trajectory_error(pred_box_list, metric, image_size=416):
 
 
 def mean_iou(pred_box_list, image_size=416):
+    """
+
+    :param pred_box_list: list produced by prediction_to_box_list function
+    :param image_size: size of the input images only used for box parameter scaling
+    :return: average iou between boxes
+    """
     # shape (batch_size, 120, boxes) boxes: (5) id, x, y, w, h
 
     error = []
@@ -117,6 +155,12 @@ def mean_iou(pred_box_list, image_size=416):
 
 
 def box_iou(box_1, box_2, image_size):
+    """
+    :param box_1: box with shape (4) center x, center y, width, height
+    :param box_2: same as box 1
+    :param image_size: image size used for clipping
+    :return: iou between box 1 and box 2
+    """
     b1x1, b1y1 = (box_1[:2] - (box_1[2:4] / 2))
     b1x2, b1y2 = (box_1[:2] + (box_1[2:4] / 2))
     b2x1, b2y1 = (box_2[:2] - (box_2[2:4] / 2))
@@ -134,12 +178,21 @@ def box_iou(box_1, box_2, image_size):
 
 
 def center_distance(box_1, box_2):
+    """
+    :param box_1: box with shape (4) center x, center y, width, height
+    :param box_2: same as box 1
+    :return: L2 distance of the box centers
+    """
     return np.sqrt(np.sum(np.square(box_1[:2] - box_2[:2])))
 
 
 class NaiveLoss(nn.modules.loss._Loss):
 
     def __init__(self, params):
+        """
+
+        :param params: dict for parameters gridshape, image_shape, path of anchor boxfile ...
+        """
         self.grid_shape = params["grid_shape"]  # (w h)
         self.image_shape = params["image_shape"]
 
@@ -224,6 +277,11 @@ class NaiveLoss(nn.modules.loss._Loss):
         return grid_in, grid_target
 
     def shift(self, input, pred):
+        """
+        :param input: input
+        :param pred: prediction
+        :return: shift input with prediction
+        """
         # input and pred are torch tensors
         # mask pred, add pred transform back to (batch, 120, 5) transform to yolo
         batch_size = input.shape[0]
@@ -232,6 +290,10 @@ class NaiveLoss(nn.modules.loss._Loss):
         return input
 
     def load_anchors(self, path):
+        """
+        :param path: path to file with anchor box parameters
+        :return: numpy array with the anchor box parameters
+        """
         # normalize to grid size
         with open(path) as file:
             line = file.readline().split(", ")  # list of x,y
@@ -245,6 +307,13 @@ class NaiveLoss(nn.modules.loss._Loss):
 
     @staticmethod
     def bbox_ious(boxes1, boxes2):
+        """
+        took it from the yolo utils implementation and some functions in numpy behave slightly different than pytorch
+        so i copied the code instead of rewriting it in numpy
+        :param boxes1: shape(batch_size, 120, 4)
+        :param boxes2:
+        :return: ious between each box
+        """
         boxes1 = torch.Tensor(boxes1)
         boxes2 = torch.Tensor(boxes2)
 

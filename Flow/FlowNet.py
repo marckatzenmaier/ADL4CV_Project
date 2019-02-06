@@ -1,9 +1,18 @@
+"""
+@author Nikita Kister
+taken from https://github.com/ClementPinard/FlowNetPytorch and adapted
+"""
 import torch
 import torch.nn as nn
 from numpy import roll
 
 
 def preprocess(image):
+    """
+    flownet expects bgr images in range (-.5 .5)
+    :param image: images should be a numpy array with shape (batch_size, channel, height, width)
+    :return: images ready for flownet in bgr and (-0.5, 0.5) in same shape as input
+    """
     # expects torch tensor !!!
     image = image.numpy().transpose((0, 2, 3, 1))
     image = roll(image, 1, axis=-1).transpose((0, 3, 1, 2))  # todo dont know if this roll stays in the batch
@@ -39,10 +48,10 @@ def deconv(in_planes, out_planes):
 class FlowNetS(nn.Module):
     expansion = 1
 
-    def __init__(self, batchNorm=True):
+    def __init__(self, batch_norm=True):
         super(FlowNetS, self).__init__()
 
-        self.batchNorm = batchNorm
+        self.batchNorm = batch_norm
         self.conv1   = conv(self.batchNorm,   6,   64, kernel_size=7, stride=2)
         self.conv2   = conv(self.batchNorm,  64,  128, kernel_size=5, stride=2)
         self.conv3   = conv(self.batchNorm, 128,  256, kernel_size=5, stride=2)
@@ -107,10 +116,15 @@ class FlowNetS(nn.Module):
 
 class FlowNetSEncoder(nn.Module):
 
-    def __init__(self, batchNorm=False, image_size=416):
+    def __init__(self, batch_norm=False, image_size=416):
+        """
+        truncated FlowNetS for feature extraction.
+        :param batch_norm:
+        :param image_size: not used. is here to not break code in notebook
+        """
         super(FlowNetSEncoder, self).__init__()
 
-        self.batchNorm = batchNorm
+        self.batchNorm = batch_norm
         self.conv1   = conv(self.batchNorm,    6,   64, kernel_size=7, stride=2)
         self.conv2   = conv(self.batchNorm,   64,  128, kernel_size=5, stride=2)
         self.conv3   = conv(self.batchNorm,  128,  256, kernel_size=5, stride=2)

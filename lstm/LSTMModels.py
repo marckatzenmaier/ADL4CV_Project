@@ -10,6 +10,12 @@ from torch.autograd import Variable
 class SequenceClassifier(nn.Module):
 
     def __init__(self, input_size, output_size, batch_size_init):
+        """
+        Uses only the box positions to predict the next frames. Normal lstm with fully connected layers in the beginning
+        :param input_size:
+        :param output_size:
+        :param batch_size_init:
+        """
         super(SequenceClassifier, self).__init__()
         # layer parameter
 
@@ -65,16 +71,19 @@ class SequenceClassifier(nn.Module):
 class SequenceClassifierCNN(nn.Module):
 
     def __init__(self, input_size, output_size, batch_size_init):
+        """
+        Uses a convolutional CNN instead of a normal one.
+        Since the input is a 4d tensor 3d convolutions are used here at the beginning to process each box individually
+        :param input_size:
+        :param output_size:
+        :param batch_size_init:
+        """
         super(SequenceClassifierCNN, self).__init__()
         # layer parameter
 
-        #self.lstm_input_size = 126*16*16
-        #self.hidden_dim = 512
         self.init_feature_transform(input_size)
 
         # lstm cell
-        #self.lstm_1 = ConvLSTMCell(channels_in=64, hidden_size=(64, 16, 16), kernel=(3, 3))
-        #self.lstm_2 = ConvLSTMCell(channels_in=64, hidden_size=(64, 16, 16), kernel=(3, 3))
 
         self.lstm_1 = ConvLSTMCell((16, 16), 64, 128, (1, 1), bias=True)
 
@@ -84,10 +93,6 @@ class SequenceClassifierCNN(nn.Module):
         self.hidden_1 = torch.zeros([batch_size_init, 128, 16, 16])
         self.cell_1 = torch.zeros([batch_size_init, 128, 16, 16])
 
-        #self.hidden_2 = torch.zeros([batch_size_init, 64, 16, 16])
-        #self.cell_2 = torch.zeros([batch_size_init, 64, 16, 16])
-        # idea use convolutions for the input and then
-
     def forward(self, input):
         batch_size = input.shape[0]
         input_h = input.shape[1]
@@ -96,15 +101,10 @@ class SequenceClassifierCNN(nn.Module):
 
         self.hidden_1, self.cell_1 = self.lstm_1(x.squeeze(dim=2), (self.hidden_1, self.cell_1))
 
-        #self.hidden_2, self.cell_2 = self.lstm_2(self.hidden_1, (self.hidden_2, self.cell_2))
         return self.output_transform(self.hidden_1)
 
     def reset_hidden(self, batch_size):
         self.hidden_1, self.cell_1 = self.lstm_1.init_hidden(batch_size)
-        #self.hidden_1 = torch.autograd.Variable(torch.zeros([batch_size, 64, 16, 16]))
-        #self.hidden_2 = torch.autograd.Variable(torch.zeros([batch_size, 64, 16, 16]))
-        #self.cell_1 = torch.autograd.Variable(torch.zeros([batch_size, 64, 16, 16]))
-        #self.cell_2 = torch.autograd.Variable(torch.zeros([batch_size, 64, 16, 16]))
 
     def feature_transform(self, x):
         x = self.relu(self.conv_1(x))
@@ -128,20 +128,12 @@ class ConvLSTMCell(nn.Module):
 
     def __init__(self, input_size, input_dim, hidden_dim, kernel_size, bias):
         """
-        Initialize ConvLSTM cell.
-
-        Parameters
-        ----------
-        input_size: (int, int)
-            Height and width of input tensor as (height, width).
-        input_dim: int
-            Number of channels of input tensor.
-        hidden_dim: int
-            Number of channels of hidden state.
-        kernel_size: (int, int)
-            Size of the convolutional kernel.
-        bias: bool
-            Whether or not to add the bias.
+        convolutional lstm cell
+        :param input_size:
+        :param input_dim:
+        :param hidden_dim:
+        :param kernel_size:
+        :param bias:
         """
 
         super(ConvLSTMCell, self).__init__()
@@ -181,32 +173,3 @@ class ConvLSTMCell(nn.Module):
         dev = next(self.parameters()).device
         return (Variable(torch.zeros(batch_size, self.hidden_dim, self.height, self.width).to(dev)),
                 Variable(torch.zeros(batch_size, self.hidden_dim, self.height, self.width).to(dev)))
-
-
-class ConvLSTM(nn.Module):
-    def __init__(self, input_size, input_dim, hidden_dim, batch_size_init):
-        super(ConvLSTM, self).__init__()
-        # layer parameter
-
-        self.input = nn.Conv2d(input_dim, 512, kernel_size=3, padding=1)
-
-        self.lstm = ConvLSTMCell(input_size, 512, hidden_dim, kernel_size=(3, 3), bias=True)
-
-        self.output = nn.Conv2d(hidden_dim, input_dim, kernel_size=3, padding=1)
-
-        self.hidden, self.cell = self.lstm.init_hidden(batch_size_init)
-
-    def forward(self, input):
-
-        x = self.input(input)  # todo bigger embedding
-
-        self.hidden, self.cell = self.lstm(x.squeeze(dim=2), (self.hidden, self.cell))
-
-        return self.output(self.hidden)
-
-    def reset_hidden(self, batch_size):
-        self.hidden, self.cell = self.lstm.init_hidden(batch_size)
-
-    def set_hidden(self, hidden, cell):
-        self.hidden = hidden
-        self.cell = cell

@@ -149,7 +149,7 @@ class BigYoloFlowLSTM(nn.Module):
         flow_encoding = self.flownet(flow_input)
         flow_encoding = self.conv_flow(flow_encoding)
 
-        encoding = torch.cat((yolo_encoding, flow_encoding), 1) # todo
+        encoding = torch.cat((yolo_encoding, flow_encoding), 1)
         output = self.lstm_part.forward(encoding)
         return output
 

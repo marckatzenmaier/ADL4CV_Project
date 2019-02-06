@@ -1,3 +1,6 @@
+"""
+@author Nikita Kister
+"""
 import torch
 import torch.nn as nn
 import os
@@ -11,6 +14,7 @@ from dataset_utils.datasets.MotBBSequence import MotBBSequence
 from lstm.LSTMLosses import *
 import matplotlib.pyplot as plt
 import scipy.misc as misc
+import cv2
 
 
 # todo format of yolov2 label
