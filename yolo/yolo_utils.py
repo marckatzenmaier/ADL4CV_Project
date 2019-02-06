@@ -230,7 +230,7 @@ def get_ap(logits, gt, width, height, anchors, IOU_threshold=.5):
 
 def filter_non_zero_gt(gt):
     """used to filter only existing bb for loss"""
-    return gt[gt[:, 0] != 0.0]
+    return gt[gt[:, 0] != 0.0][:, 1:]
 
 
 def filter_non_zero_gt_without_id(gt):
@@ -250,5 +250,5 @@ def draw_boxes_opencv(img, boxes):
         cv2.rectangle(img,
                       (int((boxes[i, 0] - boxes[i, 2] / 2) * width), int((boxes[i, 1] - boxes[i, 3] / 2) * height)),
                       (int((boxes[i, 0] + boxes[i, 2] / 2) * width), int((boxes[i, 1] + boxes[i, 3] / 2) * height)),
-                      (0, 255, 0), 1)
+                      (0, 0, 255), 2)
     return img
