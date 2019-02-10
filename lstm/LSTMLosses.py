@@ -214,6 +214,10 @@ class NaiveLoss(nn.modules.loss._Loss):
 
     def to_yolo(self, input, target, thresh=0.0, use_iou=False):
         """
+        Transforms input and target into the yolo format (assigns boxes the right grid cells and anchors)
+        Calculates grid cells and anchors only for boxes from input. The same pedestrian in target will be placed in
+        the same position as it was placed in input! This prevents the pedestrian to change the grid cell in a sequence.
+        (Mainly used for that)
         :param input: array with shape (batchsize, 120, 5)
         :param target: same shape as input
         :param thresh: threshold which determines which boxes are valid (0 if we use labels and 0.5 if we use predicted

@@ -255,6 +255,9 @@ def draw_boxes_opencv(img, boxes):
 
 
 def load_Snapshot_to_yolo_LSTM(model, opt):
+    """
+    Helper function for loading the pretrained weights into the yolo encoder and the flow encoder.
+    """
     def remove_flownet_weights(state_dict):
         del state_dict["deconv4.0.weight"]
         del state_dict["deconv3.0.weight"]
