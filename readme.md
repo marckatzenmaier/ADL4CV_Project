@@ -1,3 +1,10 @@
+# This Project was part of the Advanced Deep Learning for Computer Vision Lecture at TUM
+
+## Overview
+An overview can be found in the [poster](https://github.com/Cram13/ADL4CV_Project/blob/master/ADL4CV_Poster.pdf)
+
+## Reproduce Results
+
 In order to reproduce our results, one can find two kinds of executable scripts visualize_*.py and train_*.py
 or (pretrain_*)
 
